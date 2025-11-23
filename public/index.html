@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TradesKey Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/animejs@3.2.1/lib/anime.min.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: 'SF Pro', sans-serif; background: linear-gradient(135deg,#a855f7,#ec4899); min-height: 100vh; }
+  .tab { cursor: pointer; padding: 0.5rem 1rem; border-radius: 0.5rem; transition: all 0.3s ease; }
+  .tab:hover { transform: scale(1.05) rotate(-2deg); box-shadow: 0 10px 20px rgba(0,0,0,0.2); }
+  .card { background: rgba(255,255,255,0.1); backdrop-filter: blur(10px); padding: 1rem; border-radius: 1rem; margin-bottom: 1rem; }
+  .scroll-area { max-height: 400px; overflow-y: auto; }
+</style>
+</head>
+<body class="text-white">
+<div class="container mx-auto p-4">
+  <!-- Login -->
+  <div id="loginDiv" class="flex flex-col items-center justify-center h-screen">
+    <input id="tokenInput" placeholder="Enter token" class="p-2 rounded text-black mb-4" />
+    <button id="loginBtn" class="px-4 py-2 bg-white text-purple-700 rounded hover:bg-purple-200">Login</button>
+    <div id="loginError" class="mt-2 text-red-400"></div>
+  </div>
+
+  <!-- Dashboard -->
+  <div id="dashboard" class="hidden">
+    <div class="flex space-x-4 mb-4">
+      <div class="tab bg-purple-600/30" data-tab="stats">Statistics</div>
+      <div class="tab bg-purple-600/30" data-tab="keys">Key Generation</div>
+      <div class="tab bg-purple-600/30" data-tab="tokens">Admin Tokens</div>
+      <button id="logoutBtn" class="ml-auto bg-red-500 px-4 py-2 rounded hover:bg-red-400">Logout</button>
+    </div>
+
+    <!-- Tabs -->
+    <div id="tabContent">
+      <!-- Stats -->
+      <div id="statsTab" class="tabPane">
+        <div class="card">
+          <canvas id="keysChart"></canvas>
+        </div>
+        <div class="card">
+          <p>Total Keys Generated: <span id="totalKeys">0</span></p>
+          <p>Total Keys Redeemed: <span id="totalRedeemed">0</span></p>
+          <p>Lifetime Keys: <span id="lifetimeCount">0</span></p>
+          <p>Weekly Keys: <span id="weeklyCount">0</span></p>
+        </div>
+      </div>
+
+      <!-- Key Generation -->
+      <div id="keysTab" class="tabPane hidden">
+        <div class="flex mb-4 space-x-2">
+          <button class="bg-purple-700 px-4 py-2 rounded hover:bg-purple-500" onclick="generateKeys('weekly')">Generate 5 Weekly</button>
+          <button class="bg-pink-500 px-4 py-2 rounded hover:bg-pink-400" onclick="generateKeys('lifetime')">Generate 5 Lifetime</button>
+        </div>
+        <div id="keysList" class="scroll-area"></div>
+      </div>
+
+      <!-- Admin Tokens -->
+      <div id="tokensTab" class="tabPane hidden">
+        <div id="tokenList" class="scroll-area"></div>
+        <div class="flex mt-4 space-x-2">
+          <input id="newToken" placeholder="Token" class="p-2 rounded text-black">
+          <select id="newRole" class="p-2 rounded text-black">
+            <option value="regular">Regular</option>
+            <option value="admin">Admin</option>
+          </select>
+          <button class="bg-green-500 px-4 py-2 rounded hover:bg-green-400" onclick="createToken()">Add Token</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let authToken = null;
+const loginDiv = document.getElementById("loginDiv");
+const dashboard = document.getElementById("dashboard");
+
+// Tabs
+document.querySelectorAll(".tab").forEach(t => {
+  t.addEventListener("click", () => {
+    document.querySelectorAll(".tabPane").forEach(p => p.classList.add("hidden"));
+    document.getElementById(t.dataset.tab + "Tab").classList.remove("hidden");
+  });
+});
+
+// Login
+document.getElementById("loginBtn").addEventListener("click", async () => {
+  const token = document.getElementById("tokenInput").value.trim();
+  if(!token) return;
+  const res = await fetch("/api/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token })
+  });
+  const data = await res.json();
+  if(data.valid) {
+    authToken = data.token;
+    loginDiv.classList.add("hidden");
+    dashboard.classList.remove("hidden");
+    loadStats();
+    loadKeys();
+    loadTokens();
+  } else {
+    document.getElementById("loginError").innerText = data.reason || "Invalid token";
+  }
+});
+
+document.getElementById("logoutBtn").addEventListener("click", () => {
+  authToken = null;
+  loginDiv.classList.remove("hidden");
+  dashboard.classList.add("hidden");
+});
+
+// Fetch stats
+async function loadStats() {
+  const keysRes = await fetch("/api/keys?type=all", { headers: { "x-login-token": authToken } });
+  const keysData = await keysRes.json();
+  const keys = keysData.keys;
+
+  const totalKeys = keys.length;
+  const totalRedeemed = keys.filter(k => k.redeemed).length;
+  const lifetimeCount = keys.filter(k => k.type === "lifetime").length;
+  const weeklyCount = keys.filter(k => k.type === "weekly").length;
+
+  document.getElementById("totalKeys").innerText = totalKeys;
+  document.getElementById("totalRedeemed").innerText = totalRedeemed;
+  document.getElementById("lifetimeCount").innerText = lifetimeCount;
+  document.getElementById("weeklyCount").innerText = weeklyCount;
+
+  const ctx = document.getElementById('keysChart').getContext('2d');
+  new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: ['Lifetime', 'Weekly', 'Redeemed'],
+      datasets: [{
+        data: [lifetimeCount, weeklyCount, totalRedeemed],
+        backgroundColor: ['#ec4899', '#a855f7', '#facc15']
+      }]
+    },
+    options: { responsive: true }
+  });
+}
+
+// Keys tab
+async function generateKeys(type){
+  const res = await fetch(`/api/generate?amount=5&type=${type}`, {
+    headers:{ "x-login-token": authToken }
+  });
+  const data = await res.json();
+  loadKeys();
+}
+
+async function loadKeys() {
+  const res = await fetch(`/api/keys?type=all`, { headers: { "x-login-token": authToken }});
+  const data = await res.json();
+  const container = document.getElementById("keysList");
+  container.innerHTML = "";
+  data.keys.forEach(k => {
+    const div = document.createElement("div");
+    div.className = "card flex justify-between items-center";
+    div.innerHTML = `
+      <span>${k.key} (${k.type})</span>
+      <select onchange="updateKey('${k.key}', this.value)">
+        <option value="weekly" ${k.type==='weekly'?'selected':''}>Weekly</option>
+        <option value="lifetime" ${k.type==='lifetime'?'selected':''}>Lifetime</option>
+      </select>
+      <button class="bg-red-500 px-2 py-1 rounded hover:bg-red-400" onclick="deleteKey('${k.key}')">Delete</button>
+    `;
+    container.appendChild(div);
+  });
+}
+
+async function updateKey(key,type){
+  await fetch(`/api/keys/${key}`, {
+    method:"PUT",
+    headers:{ "Content-Type":"application/json", "x-login-token": authToken },
+    body: JSON.stringify({ type })
+  });
+  loadStats();
+}
+
+async function deleteKey(key){
+  await fetch(`/api/keys/${key}`, {
+    method:"DELETE",
+    headers:{ "x-login-token": authToken }
+  });
+  loadKeys();
+  loadStats();
+}
+
+// Admin tokens
+async function loadTokens(){
+  const res = await fetch(`/api/tokens`, { headers:{ "x-login-token": authToken }});
+  const data = await res.json();
+  const container = document.getElementById("tokenList");
+  container.innerHTML = "";
+  data.tokens.forEach(t => {
+    const div = document.createElement("div");
+    div.className = "card flex justify-between items-center";
+    div.innerHTML = `<span>${t.token} (${t.role})</span>`;
+    container.appendChild(div);
+  });
+}
+
+async function createToken(){
+  const token = document.getElementById("newToken").value;
+  const role = document.getElementById("newRole").value;
+  await fetch(`/api/tokens`, {
+    method:"POST",
+    headers:{ "x-login-token": authToken, "Content-Type":"application/json" },
+    body: JSON.stringify({ token, role })
+  });
+  loadTokens();
+}
+</script>
+</body>
+</html>
