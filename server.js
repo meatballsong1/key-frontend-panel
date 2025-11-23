@@ -1,37 +1,52 @@
 require("dotenv").config();
 const express = require("express");
 const path = require("path");
-const cors = require("cors");
-const fetch = require("node-fetch");
+const axios = require("axios");
+const cookieParser = require("cookie-parser");
 
 const app = express();
-const PORT = process.env.PORT || 3000;
-
-app.use(cors());
 app.use(express.json());
+app.use(cookieParser());
+
+// Serve frontend
 app.use(express.static(path.join(__dirname, "public")));
 
-// Serve static frontend
-app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "public/index.html"));
-});
+// Proxy API requests to tradeskey-backend
+const BACKEND_URL = "https://tradeskey-backend.onrender.com";
 
-// Proxy API requests to your backend for token-based auth
 app.use("/api", async (req, res) => {
   try {
-    const url = `https://tradeskey-backend.onrender.com${req.path}`;
-    const options = {
-      method: req.method,
-      headers: { ...req.headers },
-      body: req.method !== "GET" ? JSON.stringify(req.body) : undefined,
+    const url = `${BACKEND_URL}${req.path}`;
+    const method = req.method.toLowerCase();
+    const headers = { ...req.headers };
+
+    // Forward HttpOnly token cookie
+    if (req.cookies?.auth_token) headers["x-login-token"] = req.cookies.auth_token;
+
+    const axiosConfig = {
+      method,
+      url,
+      headers,
+      data: req.body,
+      params: req.query,
     };
-    const response = await fetch(url, options);
-    const data = await response.json();
-    res.json(data);
+
+    const response = await axios(axiosConfig);
+    res.status(response.status).json(response.data);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Backend request failed" });
+    if (err.response) {
+      res.status(err.response.status).json(err.response.data);
+    } else {
+      console.error(err);
+      res.status(500).json({ error: "Server proxy error" });
+    }
   }
 });
 
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+// Fallback to frontend for SPA routing
+app.get("*", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`Dashboard running on port ${PORT}`));
