@@ -1,56 +1,49 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html>
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>R&J Trades Dashboard</title>
-<link rel="stylesheet" href="style.css" />
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Key Panel</title>
+  <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-<div id="app">
-  <!-- Login page -->
-  <div id="login-page" class="page">
-    <h1>Get Started</h1>
-    <input id="token-input" placeholder="Enter your token" />
-    <button id="login-btn">Login</button>
-    <p id="login-error" class="error"></p>
-  </div>
-
-  <!-- Dashboard page -->
-  <div id="dashboard-page" class="page hidden">
-    <nav>
-      <button class="tab-btn" data-tab="stats">Statistics</button>
-      <button class="tab-btn" data-tab="keys">Key Management</button>
-      <button class="tab-btn" data-tab="tokens">Admin Tokens</button>
-      <button id="logout-btn">Logout</button>
-    </nav>
-
-    <section id="stats-tab" class="tab-content">
-      <h2>Statistics</h2>
-      <div id="stats-cards" class="cards"></div>
-      <canvas id="stats-chart"></canvas>
-    </section>
-
-    <section id="keys-tab" class="tab-content hidden">
-      <h2>Key Management</h2>
-      <div>
-        <select id="new-key-type">
-          <option value="weekly">Weekly</option>
-          <option value="lifetime">Lifetime</option>
-        </select>
-        <input id="new-key-amount" type="number" value="5" min="1" />
-        <button id="generate-keys-btn">Generate Keys</button>
+  <div class="container" id="app">
+    <div class="sidebar card">
+      <div class="brand">Key Panel</div>
+      <div style="font-size:12px;color:#bbb">Manage keys, tokens, and settings</div>
+      <div class="tabs">
+        <button class="navbtn" data-tab="stats">Stats</button>
+        <button class="navbtn" data-tab="keys">Keys</button>
+        <button class="navbtn" data-tab="tokens">Tokens</button>
+        <button class="navbtn" data-tab="settings">Settings</button>
       </div>
-      <div id="keys-table" class="scroll-table"></div>
-    </section>
-
-    <section id="tokens-tab" class="tab-content hidden">
-      <h2>Admin Tokens</h2>
-      <div id="tokens-table" class="scroll-table"></div>
-    </section>
+      <div style="margin-top:auto">
+        <div style="font-size:12px;color:#aaa">Logged in as: <span id="who">guest</span></div>
+        <div style="height:8px"></div>
+        <button class="btn" id="logoutBtn">Logout</button>
+      </div>
+    </div>
+    <div class="main">
+      <div class="topbar">
+        <div>
+          <div id="viewTitle">Welcome</div>
+          <div style="font-size:12px;color:#bbb">API: <span id="apiBase">https://tradeskey-backend.onrender.com/</span></div>
+        </div>
+        <div>
+          <input id="search" class="input" placeholder="Search keys or tokens..." />
+        </div>
+      </div>
+      <div id="content" style="margin-top:12px">
+        <!-- Will be populated by client JS -->
+      </div>
+    </div>
   </div>
-</div>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="app.js"></script>
+
+  <div id="toast" class="toast hidden"><div id="toastMsg">Hello</div></div>
+  <audio id="notifAudio" src="/notification.mp3" preload="auto"></audio>
+
+  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.3.0/dist/chart.umd.min.js"></script>
+  <script src="/app.js"></script>
 </body>
 </html>

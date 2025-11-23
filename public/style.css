@@ -1,19 +1,28 @@
-body {
-  margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-  background: linear-gradient(135deg, #8a2be2, #ff00ff, #ff77ff);
-  color: white;
-  overflow-x: hidden;
-}
-.page { padding: 2rem; }
-.hidden { display: none; }
-nav { display: flex; gap: 1rem; margin-bottom: 1rem; }
-button { cursor: pointer; border: none; padding: 0.5rem 1rem; border-radius: 8px; transition: transform 0.3s; }
-button:hover { transform: scale(1.05) rotate(1deg); background: rgba(255,255,255,0.2); }
-input, select { padding: 0.5rem; border-radius: 8px; border: none; margin-right: 0.5rem; }
-.cards { display: flex; gap: 1rem; margin: 1rem 0; }
-.cards .card { padding: 1rem; background: rgba(255,255,255,0.1); border-radius: 12px; flex: 1; transition: all 0.3s; }
-.cards .card:hover { transform: scale(1.05); background: rgba(255,255,255,0.2); }
-.scroll-table { max-height: 300px; overflow-y: auto; background: rgba(255,255,255,0.05); padding: 1rem; border-radius: 12px; }
-.scroll-table div { padding: 0.5rem; border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; }
-.error { color: #ff4444; }
+/* Minimal sleek purple-pink gradient theme */
+:root{--bg:#0f0714;--panel1:#1b0030;--accent1:#a855f7;--accent2:#ff6ab3;--glass:rgba(255,255,255,0.04)}
+html,body{height:100%;margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,-apple-system,"Helvetica Neue",Arial}
+body{background:linear-gradient(135deg,var(--bg),#160422);color:#fff;display:flex;align-items:center;justify-content:center}
+.container{width:1100px;max-width:96%;height:720px;background:linear-gradient(180deg,rgba(255,255,255,0.02),transparent);border-radius:18px;padding:20px;box-shadow:0 10px 40px rgba(0,0,0,0.6);backdrop-filter:blur(6px);display:flex;gap:20px}
+.sidebar{width:260px;background:linear-gradient(180deg,rgba(255,255,255,0.02),transparent);border-radius:12px;padding:18px;display:flex;flex-direction:column;gap:12px}
+.brand{font-weight:700;font-size:18px;letter-spacing:0.6px}
+.navbtn{padding:10px;border-radius:10px;border:none;background:transparent;color:#ddd;cursor:pointer;text-align:left}
+.navbtn:hover{transform:translateX(6px);color:#fff}
+.navbtn.active{background:linear-gradient(90deg,var(--accent1),var(--accent2));color:#111;font-weight:700}
+.main{flex:1;background:linear-gradient(180deg,rgba(255,255,255,0.01),transparent);border-radius:12px;padding:18px;display:flex;flex-direction:column}
+.topbar{display:flex;align-items:center;justify-content:space-between}
+.card{background:linear-gradient(90deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));border-radius:12px;padding:12px;margin-bottom:12px;box-shadow:0 6px 18px rgba(0,0,0,0.45)}
+.btn{background:linear-gradient(90deg,var(--accent1),var(--accent2));border:none;padding:8px 12px;border-radius:10px;color:#fff;cursor:pointer}
+.btn:hover{filter:brightness(1.05);transform:translateY(-2px)}
+.input{width:100%;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:transparent;color:#fff}
+.tabs{display:flex;gap:8px;margin-top:12px}
+.tab{padding:8px 10px;background:rgba(255,255,255,0.02);border-radius:8px;cursor:pointer}
+.tab.active{background:linear-gradient(90deg,var(--accent1),var(--accent2));color:#111;font-weight:700}
+.list{max-height:360px;overflow:auto}
+.toast{position:fixed;right:20px;bottom:20px;background:#111;padding:12px 16px;border-radius:10px;box-shadow:0 6px 20px rgba(0,0,0,0.6);display:flex;gap:10px;align-items:center}
+.hidden{display:none}
+/* subtle hover movement */
+.card, .navbtn, .btn {transition:transform .18s ease, box-shadow .18s ease}
+.card:hover{transform:translateY(-6px)}
+/* subtle swirling hover on buttons */
+.btn:hover{box-shadow:0 8px 24px rgba(168,85,247,0.12);transform:translateY(-4px) rotate(-0.3deg)}
+@media(max-width:900px){.container{flex-direction:column;height:auto}.sidebar{width:100%;order:2}.main{order:1}}
