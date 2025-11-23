@@ -87,7 +87,7 @@
   function setActive(tabName){
     tabs.forEach(t=>t.classList.remove('active'));
     const tb = document.querySelector('[data-tab="'+tabName+'"]'); if(tb) tb.classList.add('active');
-    title.textContent = tabName[0].toUpperCase()+tabName.slice(1);
+    if(title) try{ title.textContent = tabName[0].toUpperCase()+tabName.slice(1); }catch(e){}
     renderTab(tabName);
   }
 
