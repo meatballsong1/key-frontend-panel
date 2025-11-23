@@ -48,6 +48,9 @@ body{background:linear-gradient(135deg,var(--bg),#160422);color:var(--text);disp
 
 /* key modal */
 #keyModalBody{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.03);padding:10px;border-radius:8px}
+/* site footer */
+.site-footer{position:fixed;left:0;right:0;bottom:8px;text-align:center;font-size:13px;color:var(--muted);pointer-events:none}
+.site-footer .heart{pointer-events:auto}
 .card{background:linear-gradient(90deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));border-radius:12px;padding:12px;margin-bottom:12px;box-shadow:0 6px 18px rgba(0,0,0,0.45)}
 .btn{background:linear-gradient(90deg,var(--accent1),var(--accent2));border:none;padding:8px 12px;border-radius:10px;color:var(--text);cursor:pointer}
 .btn:hover{filter:brightness(1.05);transform:translateY(-2px)}
