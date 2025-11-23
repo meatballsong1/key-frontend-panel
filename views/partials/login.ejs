@@ -1,0 +1,15 @@
+<%- include("partials/header") %>
+<div style="display:flex; justify-content:center; align-items:center; height:100vh;">
+    <div class="card" style="width:350px; text-align:center;">
+        <h2>Login</h2>
+        <% if(error) { %>
+            <p style="color:#ff6370"><%= error %></p>
+        <% } %>
+        <form method="POST" action="/login">
+            <input class="input" type="text" name="token" placeholder="Enter Token" required>
+            <button type="submit" class="btn">Login</button>
+        </form>
+    </div>
+</div>
+<%- include("partials/footer") %>
+

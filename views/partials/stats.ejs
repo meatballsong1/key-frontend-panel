@@ -1,0 +1,44 @@
+<%- include("partials/header") %>
+<%- include("partials/navbar") %>
+
+<div style="padding:20px;">
+    <div class="card">
+        <h2>Stats Summary</h2>
+
+        <select id="periodSelect" class="input">
+            <option value="24h">Last 24h</option>
+            <option value="week">Last Week</option>
+            <option value="month">Last Month</option>
+        </select>
+        <button class="btn" id="fetchStats">Fetch</button>
+
+        <div id="statsContent" style="margin-top:20px;">
+        </div>
+    </div>
+</div>
+
+<script>
+async function fetchStats(period="24h"){
+    const res = await fetch(`/stats/summary?period=${period}`);
+    const data = await res.json();
+    const container = document.getElementById("statsContent");
+    container.innerHTML = `
+        <p>Period: ${data.period}</p>
+        <ul>
+            <li>Generated Keys: ${data.summary.generate || 0}</li>
+            <li>Redeemed Keys: ${data.summary.redeem || 0}</li>
+            <li>Deleted Keys: ${data.summary.delete || 0}</li>
+        </ul>
+    `;
+}
+
+document.getElementById("fetchStats").addEventListener("click", () => {
+    const period = document.getElementById("periodSelect").value;
+    fetchStats(period);
+});
+
+// Initial stats load
+fetchStats();
+</script>
+
+<%- include("partials/footer") %>
