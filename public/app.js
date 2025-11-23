@@ -6,6 +6,7 @@
   const audio = document.getElementById('notifAudio');
 
   // Axios instance with interceptor to detect API errors and notify
+  // Use credentials so backend can set httpOnly cookies; we prefer cookie-based auth.
   const api = axios.create({ baseURL: API_BASE, timeout: 8000, withCredentials: true });
   api.interceptors.response.use(r=>r, err => {
     // Network error or bad status
@@ -59,7 +60,9 @@
     const m = document.cookie.match(/(^|; )auth_token=([^;]+)/); return m ? decodeURIComponent(m[2]) : null;
   }
   function setToken(tok){
-    // set cookie securely when possible and set axios header for cross-origin auth
+    // Fallback: if backend doesn't set httpOnly cookie, we set a client cookie and header.
+    // Prefer server-set httpOnly cookies; this is only a fallback.
+    console.warn('Setting fallback token cookie/header — prefer server-set httpOnly cookie');
     const secure = location.protocol === 'https:' ? '; Secure' : '';
     const maxAge = 60*60*24*7; // 7 days
     document.cookie = 'auth_token='+encodeURIComponent(tok)+'; path=/; SameSite=Lax; Max-Age='+maxAge + secure;
@@ -73,10 +76,17 @@
   document.getElementById('logoutBtn').addEventListener('click', ()=>{ clearToken(); showToast('Logged out'); setTimeout(()=>location.reload(),300); });
 
   // Initial load: if no token, show login UI, else panel
-  // If token exists, attach it to axios header
-  const existingToken = getToken();
-  if(existingToken){ api.defaults.headers.common['x-login-token'] = existingToken; whoEl.textContent = 'admin'; setActive('stats'); }
-  else { renderLogin(); }
+  // Check authentication by attempting an authenticated request (backend should use cookie auth)
+  (async function checkAuth(){
+    try{
+      await api.get('/keys');
+      whoEl.textContent = 'admin';
+      setActive('stats');
+    }catch(err){
+      // not authenticated (or insufficient permissions) — show login
+      renderLogin();
+    }
+  })();
 
   function renderLogin(){
     content.innerHTML = `
@@ -99,10 +109,14 @@
       const token = document.getElementById('tokenInput').value.trim();
       if(!token){ document.getElementById('loginErr').textContent = 'Please enter a token'; return; }
       try{
-        // Verify by calling /login endpoint on API
+        // POST /login and allow backend to set httpOnly cookie (requires backend CORS allow credentials)
         const res = await api.post('/login', { token });
-        if(res.data && res.data.valid){ setToken(res.data.token); whoEl.textContent = res.data.role || 'admin'; showToast('Login successful'); setActive('stats'); }
-        else { document.getElementById('loginErr').textContent = 'Invalid token'; }
+        // If server set an httpOnly cookie, subsequent requests will be authenticated.
+        try{ await api.get('/keys'); whoEl.textContent = res.data.role || 'admin'; showToast('Login successful'); setActive('stats'); return; }catch(e){}
+
+        // Fallback: server didn't set cookie — use token from response and set header/cookie locally
+        if(res.data && res.data.token){ setToken(res.data.token); whoEl.textContent = res.data.role || 'admin'; showToast('Login successful (fallback)'); setActive('stats'); }
+        else { document.getElementById('loginErr').textContent = 'Invalid token or server did not authenticate'; }
       }catch(err){ document.getElementById('loginErr').textContent = 'Login failed: API error'; }
     });
   }
@@ -128,6 +142,7 @@
     </div>`;
     const area = document.getElementById('statsArea');
     const ranges = { r24:24, r48:48, r7:24*7, r30:24*30 };
+    let chartInstance = null;
     async function refresh(rangeKey){
       area.innerHTML = 'Loading...';
       try{
@@ -151,11 +166,31 @@
         const prevGenerated = prevWindow.length || 0;
         const genDiff = prevGenerated ? Math.round(((generated - prevGenerated)/prevGenerated)*100) : 0;
 
+        // build small time-series per hour for chart
+        const buckets = [];
+        for(let i=0;i<hours;i++){ buckets.push({ t: new Date(start + i*3600*1000), gen:0, red:0 }); }
+        inWindow.forEach(k=>{
+          const d = k.createdAt.getTime();
+          const idx = Math.floor((d - start) / (3600*1000));
+          if(idx>=0 && idx<buckets.length){ buckets[idx].gen += 1; if(k.redeemed) buckets[idx].red += 1; }
+        });
+
+        const labels = buckets.map(b=>b.t.toISOString().replace('T',' ').slice(0,16));
+        const genData = buckets.map(b=>b.gen);
+        const redData = buckets.map(b=>b.red);
+
         area.innerHTML = `<div style="display:flex;gap:12px;flex-wrap:wrap">
-          <div class="card">Generated (${hours}h): ${generated}<div style="font-size:12px;color:#bbb">${prevGenerated? (genDiff>0?'+':'')+genDiff+'% vs prior':'no prior data'}</div></div>
-          <div class="card">Redeemed: ${redeemed}</div>
-          <div class="card">Active: ${active}</div>
+          <div style="flex:1"><div class="card">Generated (${hours}h): ${generated}<div style="font-size:12px;color:#bbb">${prevGenerated? (genDiff>0?'+':'')+genDiff+'% vs prior':'no prior data'}</div></div></div>
+          <div style="width:60%"><canvas id="statsChart" height="160"></canvas></div>
         </div>`;
+
+        const ctx = document.getElementById('statsChart').getContext('2d');
+        if(chartInstance) chartInstance.destroy();
+        chartInstance = new Chart(ctx, {
+          type: 'line',
+          data: { labels, datasets: [ { label: 'Generated', data: genData, borderColor: '#a855f7', backgroundColor: 'rgba(168,85,247,0.12)', tension:0.3 }, { label: 'Redeemed', data: redData, borderColor: '#ff6ab3', backgroundColor: 'rgba(255,106,179,0.08)', tension:0.3 } ] },
+          options: { responsive: true, maintainAspectRatio:false }
+        });
       }catch(e){ area.innerHTML = '<div style="color:#ff9aa2">Failed to load stats</div>'; }
     }
     // wire range buttons
@@ -167,13 +202,15 @@
   async function renderKeys(){
     content.innerHTML = `
       <div class="card"><h3>Key Management</h3>
-        <div style="display:flex;gap:8px;margin-bottom:8px">
+        <div style="display:flex;gap:8px;margin-bottom:8px;align-items:center">
           <input id="genAmount" class="input" placeholder="Amount (1)" style="width:120px" />
           <select id="genType" class="input" style="width:160px"><option value="lifetime">Lifetime</option><option value="weekly">Weekly</option></select>
           <button class="btn" id="genBtn">Generate</button>
           <button class="btn" id="exportBtn">Export CSV</button>
+          <input id="keysSearch" class="input" placeholder="Search keys..." style="margin-left:auto;width:260px" />
         </div>
         <div id="keysList" class="list">Loading...</div>
+        <div style="display:flex;justify-content:center;gap:8px;margin-top:8px"><button class="btn" id="prevPage">Prev</button><div id="pageInfo" style="align-self:center;color:#bbb"></div><button class="btn" id="nextPage">Next</button></div>
       </div>`;
 
     document.getElementById('genBtn').addEventListener('click', async ()=>{
@@ -193,6 +230,10 @@
     });
 
     await loadKeysList();
+    // wire search and pagination
+    document.getElementById('keysSearch').addEventListener('input', ()=>{ currentPage = 1; renderPage(); });
+    document.getElementById('prevPage').addEventListener('click', ()=>{ if(currentPage>1){ currentPage--; renderPage(); } });
+    document.getElementById('nextPage').addEventListener('click', ()=>{ currentPage++; renderPage(); });
   }
 
   async function loadKeysList(){
@@ -200,24 +241,44 @@
     list.innerHTML = 'Loading...';
     try{
       const r = await api.get('/keys');
-      const keys = r.data.keys || [];
-      if(!keys.length) { list.innerHTML = '<div style="color:#aaa">No keys</div>'; return; }
-      list.innerHTML = keys.map(k=>`<div class="card" style="display:flex;justify-content:space-between;align-items:center"><div>
-          <div style="font-weight:700">${k.key}</div>
-          <div style="font-size:12px;color:#bbb">${k.type} • redeemed:${k.redeemed}</div>
-        </div>
-        <div style="display:flex;gap:8px">
-          <button class="btn" data-action="copy" data-key="${k.key}">Copy</button>
-          <button class="btn" data-action="delete" data-key="${k.key}">Delete</button>
-        </div></div>`).join('');
-
-      list.querySelectorAll('button[data-action="copy"]').forEach(b=>b.addEventListener('click', e=>{ navigator.clipboard.writeText(e.target.dataset.key); showToast('Copied'); }));
-      list.querySelectorAll('button[data-action="delete"]').forEach(b=>b.addEventListener('click', async e=>{
-        const key = e.target.dataset.key;
-        if(!confirm('Delete key '+key+'?')) return;
-        try{ await api.delete('/keys/'+encodeURIComponent(key)); showToast('Deleted'); loadKeysList(); }catch(err){ showToast('Delete failed'); }
-      }));
+      allKeys = r.data.keys || [];
+      if(!allKeys.length) { list.innerHTML = '<div style="color:#aaa">No keys</div>'; return; }
+      // initialize pagination
+      currentPage = 1; pageSize = 10;
+      renderPage();
     }catch(e){ list.innerHTML = '<div style="color:#ff9aa2">Failed to load keys</div>'; }
+  }
+
+  // pagination state
+  let allKeys = [];
+  let currentPage = 1;
+  let pageSize = 10;
+
+  function renderPage(){
+    const list = document.getElementById('keysList');
+    const search = document.getElementById('keysSearch')?.value?.toLowerCase() || '';
+    const filtered = allKeys.filter(k => k.key.toLowerCase().includes(search) || (k.type||'').toLowerCase().includes(search));
+    const total = filtered.length; const pages = Math.max(1, Math.ceil(total / pageSize));
+    if(currentPage > pages) currentPage = pages;
+    const start = (currentPage-1)*pageSize; const pageItems = filtered.slice(start, start+pageSize);
+    if(!pageItems.length){ list.innerHTML = '<div style="color:#aaa">No keys</div>'; document.getElementById('pageInfo').textContent = `${total} items`; return; }
+    list.innerHTML = pageItems.map(k=>`<div class="card" style="display:flex;justify-content:space-between;align-items:center"><div>
+        <div style="font-weight:700">${k.key}</div>
+        <div style="font-size:12px;color:#bbb">${k.type} • redeemed:${k.redeemed}</div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn" data-action="copy" data-key="${k.key}">Copy</button>
+        <button class="btn" data-action="delete" data-key="${k.key}">Delete</button>
+      </div></div>`).join('');
+
+    document.getElementById('pageInfo').textContent = `Page ${currentPage}/${pages} — ${total} items`;
+
+    list.querySelectorAll('button[data-action="copy"]').forEach(b=>b.addEventListener('click', e=>{ navigator.clipboard.writeText(e.target.dataset.key); showToast('Copied'); }));
+    list.querySelectorAll('button[data-action="delete"]').forEach(b=>b.addEventListener('click', async e=>{
+      const key = e.target.dataset.key;
+      if(!confirm('Delete key '+key+'?')) return;
+      try{ await api.delete('/keys/'+encodeURIComponent(key)); showToast('Deleted'); await loadKeysList(); }catch(err){ showToast('Delete failed'); }
+    }));
   }
 
   async function renderTokens(){
