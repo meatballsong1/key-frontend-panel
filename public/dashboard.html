@@ -42,7 +42,14 @@
 
   <!-- login removed -->
 
-  <div id="toast" class="toast hidden"><div id="toastMsg">Hello</div></div>
+  <div id="embedToast" class="embed-toast hidden" role="status" aria-live="polite">
+    <div class="stripe"></div>
+    <div class="embed-content">
+      <div class="embed-title" id="embedTitle">API Unreachable</div>
+      <div class="embed-desc" id="embedDesc">The backend is not responding — some features may be unavailable.</div>
+    </div>
+    <button id="embedClose" class="embed-close" aria-label="dismiss">×</button>
+  </div>
   <audio id="notifAudio" src="/notification.mp3" preload="auto"></audio>
 
   <div id="confirmOverlay" class="confirm-overlay hidden" style="display:none">

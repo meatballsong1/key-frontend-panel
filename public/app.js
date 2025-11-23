@@ -20,7 +20,7 @@
   });
 
   function notifyApiDown(){
-    showToast('Oops! API is currently down');
+    showEmbedNotification('API Unreachable', 'The backend is not responding — some features may be unavailable.');
     // Try to play audio, if fails, fallback to WebAudio beep
     audio.play().catch(()=>{
       try{ // WebAudio beep
@@ -31,6 +31,27 @@
         g.gain.value = 0.1; o.start(); setTimeout(()=>{o.stop(); ctx.close();}, 180);
       }catch(e){/* silent fail */}
     });
+  }
+
+  // New embed-style notification (title + description + left color stripe)
+  function showEmbedNotification(title, desc, timeout = 4200){
+    const toast = document.getElementById('embedToast');
+    const tTitle = document.getElementById('embedTitle');
+    const tDesc = document.getElementById('embedDesc');
+    const closeBtn = document.getElementById('embedClose');
+    if(!toast || !tTitle || !tDesc) return showToast(title || desc || 'Notification');
+    // populate
+    tTitle.textContent = title || '';
+    tDesc.textContent = desc || '';
+    // show with animation
+    toast.classList.remove('hidden');
+    // ensure class toggles to trigger animation
+    setTimeout(()=>{ toast.classList.add('show'); }, 8);
+    // auto-hide
+    clearTimeout(toast._t);
+    toast._t = setTimeout(()=>{ toast.classList.remove('show'); toast.classList.add('hidden'); }, timeout);
+    // close button
+    if(closeBtn){ closeBtn.onclick = ()=>{ clearTimeout(toast._t); toast.classList.remove('show'); toast.classList.add('hidden'); }; }
   }
 
   function showToast(msg, timeout=3500){
