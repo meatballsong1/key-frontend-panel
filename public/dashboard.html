@@ -17,12 +17,17 @@
         <button class="navbtn" data-tab="settings">Settings</button>
       </nav>
       <div class="navright">
-        <div style="font-size:13px;color:var(--muted);margin-right:12px">API: <span id="apiBase">https://tradeskey-backend.onrender.com/</span></div>
-        <div style="display:flex;gap:8px;align-items:center">
-          <div id="who" style="font-size:13px;color:var(--muted)">guest</div>
-          <button class="btn small" id="loginToggle">Login</button>
-          <button class="btn small" id="logoutBtn" style="display:none">Logout</button>
+        <div style="display:flex;align-items:center;gap:8px;margin-right:12px">
+          <label style="font-size:13px;color:var(--muted);margin-right:6px">Theme</label>
+          <select id="themePicker" class="input select" style="width:140px">
+            <option value="theme-purple-pink">Purple-Pink</option>
+            <option value="theme-pink">Pink</option>
+            <option value="theme-purple">Purple</option>
+            <option value="theme-blue">Blue</option>
+            <option value="theme-dark">Dark</option>
+          </select>
         </div>
+        <div style="font-size:13px;color:var(--muted);margin-right:12px">API: <span id="apiBase">https://tradeskey-backend.onrender.com/</span></div>
       </div>
     </header>
 
@@ -33,20 +38,7 @@
     </main>
   </div>
 
-  <!-- Login Modal -->
-  <div id="loginModal" class="modal hidden" style="display:none">
-    <div class="modal-box card">
-      <h3 style="margin-top:0">Login</h3>
-      <div style="display:flex;flex-direction:column;gap:8px">
-        <input id="modalToken" class="input" placeholder="Enter admin token" />
-        <label style="font-size:13px;color:var(--muted)"><input type="checkbox" id="allowFallback" /> Allow session fallback (insecure)</label>
-        <div style="display:flex;gap:8px;justify-content:flex-end">
-          <button class="btn" id="modalLogin">Login</button>
-          <button class="btn" id="modalClose">Close</button>
-        </div>
-      </div>
-    </div>
-  </div>
+  <!-- login removed -->
 
   <div id="toast" class="toast hidden"><div id="toastMsg">Hello</div></div>
   <audio id="notifAudio" src="/notification.mp3" preload="auto"></audio>
@@ -58,6 +50,15 @@
         <button id="confirmNo" class="confirm-no">NO</button>
         <button id="confirmYes" class="confirm-yes">YES</button>
       </div>
+    </div>
+  </div>
+
+  <!-- Key details modal -->
+  <div id="keyModal" class="modal hidden" style="display:none">
+    <div class="modal-box card">
+      <h3 id="keyModalTitle">Key Details</h3>
+      <pre id="keyModalBody" style="white-space:pre-wrap;color:var(--muted);background:transparent;border-radius:8px;padding:6px"></pre>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:8px"><button class="btn" id="keyModalClose">Close</button></div>
     </div>
   </div>
 

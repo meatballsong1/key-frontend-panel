@@ -1,15 +1,14 @@
 (function(){
   const API_BASE = 'https://tradeskey-backend.onrender.com/';
-  const whoEl = document.getElementById('who');
   const toast = document.getElementById('toast');
   const toastMsg = document.getElementById('toastMsg');
   const audio = document.getElementById('notifAudio');
-  const loginToggle = document.getElementById('loginToggle');
-  const loginModal = document.getElementById('loginModal');
-  const modalToken = document.getElementById('modalToken');
-  const modalLogin = document.getElementById('modalLogin');
-  const modalClose = document.getElementById('modalClose');
-  const allowFallback = document.getElementById('allowFallback');
+  const loginToggle = null;
+  const themePicker = document.getElementById('themePicker');
+  const keyModal = document.getElementById('keyModal');
+  const keyModalTitle = document.getElementById('keyModalTitle');
+  const keyModalBody = document.getElementById('keyModalBody');
+  const keyModalClose = document.getElementById('keyModalClose');
 
   // Axios instance with interceptor to detect API errors and notify
   // Use credentials so backend can set httpOnly cookies; we prefer cookie-based auth.
@@ -77,6 +76,8 @@
   }
   // apply saved theme on load
   applyTheme(localStorage.getItem('kp_theme'));
+  // wire theme picker
+  if(themePicker){ themePicker.value = localStorage.getItem('kp_theme') || 'theme-purple-pink'; themePicker.addEventListener('change', (e)=>applyTheme(e.target.value)); }
 
   // Simple client-side router + UI
   const tabs = document.querySelectorAll('.navbtn');
@@ -98,55 +99,10 @@
     if(first) first.classList.add('active');
   })();
 
-  // Login state - secure by default: prefer httpOnly cookie. If fallback is explicitly allowed by user
-  function getFallbackToken(){ return sessionStorage.getItem('fallback_token'); }
-  function setFallbackToken(tok, persist){
-    // store in sessionStorage only if user allowed fallback (less persistent than localStorage)
-    if(!tok){ sessionStorage.removeItem('fallback_token'); delete api.defaults.headers.common['x-login-token']; return; }
-    api.defaults.headers.common['x-login-token'] = tok;
-    if(persist) sessionStorage.setItem('fallback_token', tok);
-  }
-  function clearFallback(){ sessionStorage.removeItem('fallback_token'); delete api.defaults.headers.common['x-login-token']; }
-
-  document.getElementById('logoutBtn').addEventListener('click', async ()=>{
-    try{ await api.post('/logout'); }catch(e){}
-    clearFallback();
-    showToast('Logged out');
-    setTimeout(()=>location.reload(),300);
-  });
-
-  // Initial load: if no token, show login UI, else panel
-  // Check authentication by attempting an authenticated request (backend should use cookie auth)
-  // on load: if fallback token exists in sessionStorage, apply it; then check auth
-  (async function checkAuth(){
-    const fb = getFallbackToken(); if(fb) setFallbackToken(fb, true);
-    try{ await api.get('/keys'); whoEl.textContent = 'admin'; document.getElementById('logoutBtn').style.display = 'inline-block'; loginToggle.style.display = 'none'; setActive('stats'); }
-    catch(err){ renderLogin(); }
+  // Authentication removed: always show dashboard UI (user manages API access externally)
+  (function initNoAuth(){
+    setActive('stats');
   })();
-
-  // renderLogin is minimal since dashboard has modal-based login. Show landing login area if needed.
-  function renderLogin(){
-    content.innerHTML = `<div style="max-width:520px;margin:auto"><h2>Login</h2><div class="card"><label>Click login in the header to authenticate</label></div></div>`;
-  }
-
-  // Login modal helpers
-  function openLoginModal(){ if(loginModal){ loginModal.style.display='flex'; loginModal.classList.remove('hidden'); modalToken && modalToken.focus(); } }
-  function closeLoginModal(){ if(loginModal){ loginModal.style.display='none'; loginModal.classList.add('hidden'); modalToken && (modalToken.value=''); allowFallback && (allowFallback.checked=false); } }
-
-  if(loginToggle){ loginToggle.addEventListener('click', openLoginModal); }
-  if(modalClose){ modalClose.addEventListener('click', closeLoginModal); }
-  if(modalLogin){ modalLogin.addEventListener('click', async ()=>{
-    const token = (modalToken && modalToken.value || '').trim(); const allow = !!(allowFallback && allowFallback.checked);
-    if(!token){ showToast('Enter token'); return; }
-    try{
-      const res = await api.post('/login', { token });
-      // test if server set cookie by trying an authenticated request
-      try{ await api.get('/keys'); whoEl.textContent = res.data.role || 'admin'; showToast('Login successful'); document.getElementById('logoutBtn').style.display='inline-block'; loginToggle.style.display='none'; closeLoginModal(); setActive('stats'); return; }catch(e){}
-      // fallback: only set header/session if user allowed fallback
-      if(allow && res.data && res.data.token){ setFallbackToken(res.data.token, true); whoEl.textContent = res.data.role || 'admin'; showToast('Login successful (session fallback)'); document.getElementById('logoutBtn').style.display='inline-block'; loginToggle.style.display='none'; closeLoginModal(); setActive('stats'); }
-      else { showToast('Login failed: server did not set secure cookie. Enable fallback to use session token.'); }
-    }catch(err){ showToast('Login error'); }
-  }); }
 
   // Render functions for tabs
   async function renderTab(tab){
@@ -164,12 +120,17 @@
         <button class="btn" id="r48">48h</button>
         <button class="btn" id="r7">7d</button>
         <button class="btn" id="r30">30d</button>
+        <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
+          <label style="font-size:13px;color:var(--muted)">Auto-refresh</label>
+          <button class="btn small" id="autoRefreshToggle">Off</button>
+        </div>
       </div>
       <div id="statsArea">Loading...</div>
     </div>`;
     const area = document.getElementById('statsArea');
     const ranges = { r24:24, r48:48, r7:24*7, r30:24*30 };
     let chartInstance = null;
+    let autoRefreshHandle = null;
     async function refresh(rangeKey){
       area.innerHTML = 'Loading...';
       try{
@@ -222,6 +183,13 @@
     }
     // wire range buttons
     Object.keys(ranges).forEach(k=>{ const el = document.getElementById(k); if(el) el.addEventListener('click', ()=>{ refresh(k); document.querySelectorAll('#r24,#r48,#r7,#r30').forEach(b=>b.classList.remove('active')); el.classList.add('active'); }); });
+    const autoBtn = document.getElementById('autoRefreshToggle');
+    let autoOn = false;
+    if(autoBtn){ autoBtn.addEventListener('click', ()=>{
+      autoOn = !autoOn; autoBtn.textContent = autoOn? 'On':'Off';
+      if(autoOn){ autoRefreshHandle = setInterval(()=>{ const active = document.querySelector('.navbtn.active'); const key = active?.dataset?.tab || 'stats'; refresh(key); }, 7000); }
+      else { clearInterval(autoRefreshHandle); autoRefreshHandle = null; }
+    }); }
     // default 24h
     const def = document.getElementById('r24'); if(def) { def.classList.add('active'); refresh('r24'); }
   }
@@ -231,10 +199,17 @@
       <div class="card"><h3>Key Management</h3>
         <div style="display:flex;gap:8px;margin-bottom:8px;align-items:center">
           <input id="genAmount" class="input" placeholder="Amount (1)" style="width:120px" />
-          <select id="genType" class="input" style="width:160px"><option value="lifetime">Lifetime</option><option value="weekly">Weekly</option></select>
+          <select id="genType" class="input" style="width:140px"><option value="lifetime">Lifetime</option><option value="weekly">Weekly</option></select>
           <button class="btn" id="genBtn">Generate</button>
           <button class="btn" id="exportBtn">Export CSV</button>
+          <select id="typeFilter" class="input" style="width:120px;margin-left:8px"><option value="">All types</option><option value="lifetime">lifetime</option><option value="weekly">weekly</option></select>
           <input id="keysSearch" class="input" placeholder="Search keys..." style="margin-left:auto;width:260px" />
+        </div>
+        <div class="keys-toolbar" id="keysToolbar" style="display:none">
+          <label class="muted"><input id="selectAllChk" type="checkbox" class="key-checkbox"/> Select all</label>
+          <button class="btn small" id="copySelected">Copy Selected</button>
+          <button class="btn small" id="deleteSelected">Delete Selected</button>
+          <div style="margin-left:auto;color:var(--muted);font-size:13px">Selected: <span id="selectedCount">0</span></div>
         </div>
         <div id="generatedArea" style="margin-top:8px;display:none">
           <label style="font-size:13px;color:var(--muted)">Generated keys (comma-separated)</label>
@@ -270,6 +245,30 @@
       // Export via backend endpoint
       const url = API_BASE + 'keys-csv';
       window.open(url, '_blank');
+    });
+
+    // wire type filter
+    document.getElementById('typeFilter').addEventListener('change', ()=>{ currentPage = 1; renderPage(); });
+
+    // bulk toolbar buttons
+    const keysToolbar = document.getElementById('keysToolbar');
+    const selectAllChk = document.getElementById('selectAllChk');
+    const copySelectedBtn = document.getElementById('copySelected');
+    const deleteSelectedBtn = document.getElementById('deleteSelected');
+    const selectedCount = document.getElementById('selectedCount');
+    function updateSelectedCount(){ const n = document.querySelectorAll('.key-select:checked').length; selectedCount.textContent = String(n); keysToolbar.style.display = n>0 ? 'flex' : 'none'; }
+    if(selectAllChk) selectAllChk.addEventListener('change', ()=>{ document.querySelectorAll('.key-select').forEach(cb=>cb.checked = selectAllChk.checked); updateSelectedCount(); });
+    if(copySelectedBtn) copySelectedBtn.addEventListener('click', ()=>{
+      const keys = Array.from(document.querySelectorAll('.key-select:checked')).map(cb=>cb.dataset.key);
+      if(!keys.length) return showToast('No keys selected');
+      try{ navigator.clipboard.writeText(keys.join(',')); showToast('Copied '+keys.length+' keys'); }catch(e){ showToast('Copy failed'); }
+    });
+    if(deleteSelectedBtn) deleteSelectedBtn.addEventListener('click', ()=>{
+      const keys = Array.from(document.querySelectorAll('.key-select:checked')).map(cb=>cb.dataset.key);
+      if(!keys.length) return showToast('No keys selected');
+      showConfirm('Delete '+keys.length+' selected keys? This cannot be undone.', async ()=>{
+        try{ await Promise.all(keys.map(k=>api.delete('/keys/'+encodeURIComponent(k)))); showToast('Deleted '+keys.length+' keys'); await loadKeysList(); }catch(e){ showToast('Bulk delete failed'); }
+      });
     });
 
     // add Delete All button
@@ -327,12 +326,16 @@
     if(!pageItems.length){ list.innerHTML = '<div style="color:#aaa">No keys</div>'; document.getElementById('pageInfo').textContent = `${total} items`; return; }
     list.innerHTML = pageItems.map(k=>{
       const alias = localStorage.getItem('alias_'+k.key) || '';
-      return `<div class="card" style="display:flex;justify-content:space-between;align-items:center"><div>
-        <div style="font-weight:700"><span class="key-name" data-key="${k.key}">${alias || k.key}</span></div>
-        <div style="font-size:12px;color:var(--muted)">${k.type} • redeemed:${k.redeemed}</div>
+      return `<div class="card" style="display:flex;justify-content:space-between;align-items:center"><div style="display:flex;gap:12px;align-items:center">
+        <input type="checkbox" class="key-select key-checkbox" data-key="${k.key}" />
+        <div>
+          <div style="font-weight:700"><span class="key-name" data-key="${k.key}">${alias || k.key}</span></div>
+          <div style="font-size:12px;color:var(--muted)">${k.type} • redeemed:${k.redeemed}</div>
+        </div>
       </div>
       <div style="display:flex;gap:8px;align-items:center">
         <select class="input select type-select" data-key="${k.key}"><option value="lifetime">lifetime</option><option value="weekly">weekly</option></select>
+        <button class="btn" data-action="details" data-key='${encodeURIComponent(JSON.stringify(k))}'>Details</button>
         <button class="btn" data-action="copy" data-key="${k.key}">Copy</button>
         <button class="btn" data-action="delete" data-key="${k.key}">Delete</button>
       </div></div>`;
@@ -361,6 +364,20 @@
       });
     });
 
+    // wire key-select checkboxes
+    list.querySelectorAll('.key-select').forEach(cb=>{ cb.addEventListener('change', ()=>{ const selectAll = document.getElementById('selectAllChk'); if(selectAll){ selectAll.checked = document.querySelectorAll('.key-select:checked').length === document.querySelectorAll('.key-select').length; } const sc = document.getElementById('selectedCount'); if(sc) sc.textContent = String(document.querySelectorAll('.key-select:checked').length); const keysToolbar = document.getElementById('keysToolbar'); if(keysToolbar) keysToolbar.style.display = document.querySelectorAll('.key-select:checked').length>0 ? 'flex':'none'; }); });
+
+    // details action
+    list.querySelectorAll('button[data-action="details"]').forEach(b=>b.addEventListener('click', e=>{
+      try{
+        const data = decodeURIComponent(e.target.dataset.key);
+        const obj = JSON.parse(data);
+        keyModalTitle.textContent = obj.key || 'Key Details';
+        keyModalBody.textContent = JSON.stringify(obj, null, 2);
+        if(keyModal){ keyModal.style.display='flex'; keyModal.classList.remove('hidden'); }
+      }catch(err){ showToast('Failed to show details'); }
+    }));
+
     list.querySelectorAll('button[data-action="copy"]').forEach(b=>b.addEventListener('click', e=>{ navigator.clipboard.writeText(e.target.dataset.key); showToast('Copied'); }));
     list.querySelectorAll('button[data-action="delete"]').forEach(b=>b.addEventListener('click', async e=>{
       const key = e.target.dataset.key;
@@ -378,6 +395,9 @@
     });
     try{ const r = await api.get('/tokens'); const tokens = r.data.tokens || []; const el = document.getElementById('tokensList'); el.innerHTML = tokens.map(tok=>`<div class="card" style="display:flex;justify-content:space-between"><div><div style="font-weight:700">${tok.token}</div><div style="font-size:12px;color:#bbb">${tok.role}</div></div><div style="display:flex;gap:8px"><button class="btn" data-id="${tok._id}" data-action="del">Delete</button></div></div>`).join(''); el.querySelectorAll('button[data-action="del"]').forEach(b=>b.addEventListener('click', async e=>{ if(!confirm('Delete token?')) return; try{ await api.delete('/tokens/'+e.target.dataset.id); showToast('Deleted'); renderTokens(); }catch(err){ showToast('Delete failed'); }})); }catch(e){ document.getElementById('tokensList').innerHTML = '<div style="color:#ff9aa2">Failed to load tokens</div>' }
   }
+
+  // key modal close
+  if(keyModalClose){ keyModalClose.addEventListener('click', ()=>{ if(keyModal){ keyModal.style.display='none'; keyModal.classList.add('hidden'); } }); }
 
   async function renderSettings(){
     content.innerHTML = `<div class="card"><h3>Settings</h3><div style="display:flex;gap:12px;align-items:center"><label>Auth enabled:</label><button class="btn" id="toggleAuth">Toggle</button></div><div id="settingsMsg" style="margin-top:8px"></div></div>`;
