@@ -1,0 +1,68 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Key Panel — Dashboard</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="container fluid" id="app">
+    <header class="topnav card">
+      <div class="brand">Key Panel</div>
+      <nav class="navtabs">
+        <button class="navbtn" data-tab="stats">Stats</button>
+        <button class="navbtn" data-tab="keys">Keys</button>
+        <button class="navbtn" data-tab="tokens">Tokens</button>
+        <button class="navbtn" data-tab="settings">Settings</button>
+      </nav>
+      <div class="navright">
+        <div style="font-size:13px;color:var(--muted);margin-right:12px">API: <span id="apiBase">https://tradeskey-backend.onrender.com/</span></div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <div id="who" style="font-size:13px;color:var(--muted)">guest</div>
+          <button class="btn small" id="loginToggle">Login</button>
+          <button class="btn small" id="logoutBtn" style="display:none">Logout</button>
+        </div>
+      </div>
+    </header>
+
+    <main class="main">
+      <div id="content" class="content-area fade-in">
+        <!-- Will be populated by client JS -->
+      </div>
+    </main>
+  </div>
+
+  <!-- Login Modal -->
+  <div id="loginModal" class="modal hidden" style="display:none">
+    <div class="modal-box card">
+      <h3 style="margin-top:0">Login</h3>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <input id="modalToken" class="input" placeholder="Enter admin token" />
+        <label style="font-size:13px;color:var(--muted)"><input type="checkbox" id="allowFallback" /> Allow session fallback (insecure)</label>
+        <div style="display:flex;gap:8px;justify-content:flex-end">
+          <button class="btn" id="modalLogin">Login</button>
+          <button class="btn" id="modalClose">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden"><div id="toastMsg">Hello</div></div>
+  <audio id="notifAudio" src="/notification.mp3" preload="auto"></audio>
+
+  <div id="confirmOverlay" class="confirm-overlay hidden" style="display:none">
+    <div class="confirm-box">
+      <h4 id="confirmMsg">Are you sure?</h4>
+      <div class="confirm-actions">
+        <button id="confirmNo" class="confirm-no">NO</button>
+        <button id="confirmYes" class="confirm-yes">YES</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.3.0/dist/chart.umd.min.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>

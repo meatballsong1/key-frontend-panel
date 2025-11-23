@@ -4,6 +4,12 @@
   const toast = document.getElementById('toast');
   const toastMsg = document.getElementById('toastMsg');
   const audio = document.getElementById('notifAudio');
+  const loginToggle = document.getElementById('loginToggle');
+  const loginModal = document.getElementById('loginModal');
+  const modalToken = document.getElementById('modalToken');
+  const modalLogin = document.getElementById('modalLogin');
+  const modalClose = document.getElementById('modalClose');
+  const allowFallback = document.getElementById('allowFallback');
 
   // Axios instance with interceptor to detect API errors and notify
   // Use credentials so backend can set httpOnly cookies; we prefer cookie-based auth.
@@ -92,71 +98,55 @@
     if(first) first.classList.add('active');
   })();
 
-  // Login state
-  function getToken(){
-    const m = document.cookie.match(/(^|; )auth_token=([^;]+)/); return m ? decodeURIComponent(m[2]) : null;
-  }
-  function setToken(tok){
-    // Fallback: if backend doesn't set httpOnly cookie, we set a client cookie and header.
-    // Prefer server-set httpOnly cookies; this is only a fallback.
-    console.warn('Setting fallback token cookie/header — prefer server-set httpOnly cookie');
-    const secure = location.protocol === 'https:' ? '; Secure' : '';
-    const maxAge = 60*60*24*7; // 7 days
-    document.cookie = 'auth_token='+encodeURIComponent(tok)+'; path=/; SameSite=Lax; Max-Age='+maxAge + secure;
+  // Login state - secure by default: prefer httpOnly cookie. If fallback is explicitly allowed by user
+  function getFallbackToken(){ return sessionStorage.getItem('fallback_token'); }
+  function setFallbackToken(tok, persist){
+    // store in sessionStorage only if user allowed fallback (less persistent than localStorage)
+    if(!tok){ sessionStorage.removeItem('fallback_token'); delete api.defaults.headers.common['x-login-token']; return; }
     api.defaults.headers.common['x-login-token'] = tok;
+    if(persist) sessionStorage.setItem('fallback_token', tok);
   }
-  function clearToken(){
-    document.cookie = 'auth_token=; max-age=0; path=/';
-    delete api.defaults.headers.common['x-login-token'];
-  }
+  function clearFallback(){ sessionStorage.removeItem('fallback_token'); delete api.defaults.headers.common['x-login-token']; }
 
-  document.getElementById('logoutBtn').addEventListener('click', ()=>{ clearToken(); showToast('Logged out'); setTimeout(()=>location.reload(),300); });
+  document.getElementById('logoutBtn').addEventListener('click', async ()=>{
+    try{ await api.post('/logout'); }catch(e){}
+    clearFallback();
+    showToast('Logged out');
+    setTimeout(()=>location.reload(),300);
+  });
 
   // Initial load: if no token, show login UI, else panel
   // Check authentication by attempting an authenticated request (backend should use cookie auth)
+  // on load: if fallback token exists in sessionStorage, apply it; then check auth
   (async function checkAuth(){
-    try{
-      await api.get('/keys');
-      whoEl.textContent = 'admin';
-      setActive('stats');
-    }catch(err){
-      // not authenticated (or insufficient permissions) — show login
-      renderLogin();
-    }
+    const fb = getFallbackToken(); if(fb) setFallbackToken(fb, true);
+    try{ await api.get('/keys'); whoEl.textContent = 'admin'; document.getElementById('logoutBtn').style.display = 'inline-block'; loginToggle.style.display = 'none'; setActive('stats'); }
+    catch(err){ renderLogin(); }
   })();
 
+  // renderLogin is minimal since dashboard has modal-based login. Show landing login area if needed.
   function renderLogin(){
-    content.innerHTML = `
-      <div style="max-width:520px;margin:auto">
-        <h2>Login</h2>
-        <div class="card">
-          <label>Token</label>
-          <input id="tokenInput" class="input" placeholder="Enter admin token (e.g. testware)" />
-          <div style="height:8px"></div>
-          <button class="btn" id="loginBtn">Login</button>
-          <div id="loginErr" style="color:#ffb4c6;margin-top:8px"></div>
-        </div>
-      </div>`;
-
-    // focus and allow Enter to submit
-    const tokenInput = document.getElementById('tokenInput');
-    if(tokenInput) { tokenInput.focus(); tokenInput.addEventListener('keydown', (e)=>{ if(e.key === 'Enter') document.getElementById('loginBtn').click(); }); }
-
-    document.getElementById('loginBtn').addEventListener('click', async ()=>{
-      const token = document.getElementById('tokenInput').value.trim();
-      if(!token){ document.getElementById('loginErr').textContent = 'Please enter a token'; return; }
-      try{
-        // POST /login and allow backend to set httpOnly cookie (requires backend CORS allow credentials)
-        const res = await api.post('/login', { token });
-        // If server set an httpOnly cookie, subsequent requests will be authenticated.
-        try{ await api.get('/keys'); whoEl.textContent = res.data.role || 'admin'; showToast('Login successful'); setActive('stats'); return; }catch(e){}
-
-        // Fallback: server didn't set cookie — use token from response and set header/cookie locally
-        if(res.data && res.data.token){ setToken(res.data.token); whoEl.textContent = res.data.role || 'admin'; showToast('Login successful (fallback)'); setActive('stats'); }
-        else { document.getElementById('loginErr').textContent = 'Invalid token or server did not authenticate'; }
-      }catch(err){ document.getElementById('loginErr').textContent = 'Login failed: API error'; }
-    });
+    content.innerHTML = `<div style="max-width:520px;margin:auto"><h2>Login</h2><div class="card"><label>Click login in the header to authenticate</label></div></div>`;
   }
+
+  // Login modal helpers
+  function openLoginModal(){ if(loginModal){ loginModal.style.display='flex'; loginModal.classList.remove('hidden'); modalToken && modalToken.focus(); } }
+  function closeLoginModal(){ if(loginModal){ loginModal.style.display='none'; loginModal.classList.add('hidden'); modalToken && (modalToken.value=''); allowFallback && (allowFallback.checked=false); } }
+
+  if(loginToggle){ loginToggle.addEventListener('click', openLoginModal); }
+  if(modalClose){ modalClose.addEventListener('click', closeLoginModal); }
+  if(modalLogin){ modalLogin.addEventListener('click', async ()=>{
+    const token = (modalToken && modalToken.value || '').trim(); const allow = !!(allowFallback && allowFallback.checked);
+    if(!token){ showToast('Enter token'); return; }
+    try{
+      const res = await api.post('/login', { token });
+      // test if server set cookie by trying an authenticated request
+      try{ await api.get('/keys'); whoEl.textContent = res.data.role || 'admin'; showToast('Login successful'); document.getElementById('logoutBtn').style.display='inline-block'; loginToggle.style.display='none'; closeLoginModal(); setActive('stats'); return; }catch(e){}
+      // fallback: only set header/session if user allowed fallback
+      if(allow && res.data && res.data.token){ setFallbackToken(res.data.token, true); whoEl.textContent = res.data.role || 'admin'; showToast('Login successful (session fallback)'); document.getElementById('logoutBtn').style.display='inline-block'; loginToggle.style.display='none'; closeLoginModal(); setActive('stats'); }
+      else { showToast('Login failed: server did not set secure cookie. Enable fallback to use session token.'); }
+    }catch(err){ showToast('Login error'); }
+  }); }
 
   // Render functions for tabs
   async function renderTab(tab){

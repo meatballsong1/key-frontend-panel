@@ -5,55 +5,28 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Key Panel</title>
   <link rel="stylesheet" href="/style.css">
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Key Panel — Home</title>
+  <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-  <div class="container" id="app">
-    <div class="sidebar card">
-      <div class="brand">Key Panel</div>
-      <div style="font-size:12px;color:#bbb">Manage keys, tokens, and settings</div>
-      <div class="tabs">
-        <button class="navbtn" data-tab="stats">Stats</button>
-        <button class="navbtn" data-tab="keys">Keys</button>
-        <button class="navbtn" data-tab="tokens">Tokens</button>
-        <button class="navbtn" data-tab="settings">Settings</button>
-      </div>
-      <div style="margin-top:auto">
-        <div style="font-size:12px;color:#aaa">Logged in as: <span id="who">guest</span></div>
-        <div style="height:8px"></div>
-        <button class="btn" id="logoutBtn">Logout</button>
-      </div>
+  <div style="max-width:900px;margin:80px auto;text-align:center;color:#fff">
+    <h1 style="font-size:36px;margin-bottom:8px">Welcome to Key Panel</h1>
+    <p style="color:#ccc;max-width:720px;margin:0 auto 24px">Manage keys, tokens and settings for your application. Use the dashboard to generate keys, manage tokens, and view usage statistics.</p>
+    <div style="display:flex;gap:12px;justify-content:center;margin-bottom:18px">
+      <a class="btn" href="/login">Login</a>
+      <a class="btn" href="/dashboard">Open Dashboard</a>
+      <a class="btn" href="/docs">Docs</a>
+      <a class="btn" href="/about">About</a>
     </div>
-    <div class="main">
-      <div class="topbar">
-        <div>
-          <div id="viewTitle">Welcome</div>
-          <div style="font-size:12px;color:#bbb">API: <span id="apiBase">https://tradeskey-backend.onrender.com/</span></div>
-        </div>
-        <div>
-          <input id="search" class="input" placeholder="Search keys or tokens..." />
-        </div>
-      </div>
-      <div id="content" style="margin-top:12px">
-        <!-- Will be populated by client JS -->
-      </div>
-    </div>
+    <div style="color:#999;font-size:13px">API: <code style="color:#ddd">https://tradeskey-backend.onrender.com/</code></div>
   </div>
-
-  <div id="toast" class="toast hidden"><div id="toastMsg">Hello</div></div>
-  <audio id="notifAudio" src="/notification.mp3" preload="auto"></audio>
-
-  <div id="confirmOverlay" class="confirm-overlay hidden" style="display:none">
-    <div class="confirm-box">
-      <h4 id="confirmMsg">Are you sure?</h4>
-      <div class="confirm-actions">
-        <button id="confirmNo" class="confirm-no">NO</button>
-        <button id="confirmYes" class="confirm-yes">YES</button>
-      </div>
-    </div>
-  </div>
-
-  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.3.0/dist/chart.umd.min.js"></script>
+</body>
+</html>
   <script src="/app.js"></script>
 </body>
 </html>
