@@ -42,6 +42,16 @@
   <div id="toast" class="toast hidden"><div id="toastMsg">Hello</div></div>
   <audio id="notifAudio" src="/notification.mp3" preload="auto"></audio>
 
+  <div id="confirmOverlay" class="confirm-overlay hidden" style="display:none">
+    <div class="confirm-box">
+      <h4 id="confirmMsg">Are you sure?</h4>
+      <div class="confirm-actions">
+        <button id="confirmNo" class="confirm-no">NO</button>
+        <button id="confirmYes" class="confirm-yes">YES</button>
+      </div>
+    </div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.3.0/dist/chart.umd.min.js"></script>
   <script src="/app.js"></script>

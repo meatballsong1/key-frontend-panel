@@ -30,10 +30,47 @@
 
   function showToast(msg, timeout=3500){
     toastMsg.textContent = msg;
+    // pink style for important messages
     toast.classList.remove('hidden');
+    toast.classList.add('show');
+    toast.classList.add('toast-pink');
     clearTimeout(toast._t);
-    toast._t = setTimeout(()=>toast.classList.add('hidden'), timeout);
+    toast._t = setTimeout(()=>{ toast.classList.remove('show'); toast.classList.add('hidden'); toast.classList.remove('toast-pink'); }, timeout);
   }
+
+  // Themed confirm helper that uses the overlay in index.html
+  function showConfirm(message, onYes){
+    const overlay = document.getElementById('confirmOverlay');
+    const msgEl = document.getElementById('confirmMsg');
+    const yes = document.getElementById('confirmYes');
+    const no = document.getElementById('confirmNo');
+    if(!overlay || !msgEl || !yes || !no){ // fallback to window.confirm
+      if(window.confirm(message)) onYes && onYes();
+      return;
+    }
+    msgEl.textContent = message;
+    overlay.style.display = 'flex';
+    overlay.classList.remove('hidden');
+    // remove previous handlers
+    const clean = ()=>{
+      overlay.style.display = 'none';
+      overlay.classList.add('hidden');
+      yes.onclick = null; no.onclick = null;
+    };
+    yes.onclick = async ()=>{ try{ await onYes(); }catch(e){} finally{ clean(); } };
+    no.onclick = ()=>{ clean(); };
+  }
+
+  // Theme handling
+  const availableThemes = ['theme-purple-pink','theme-pink','theme-purple','theme-blue','theme-dark'];
+  function applyTheme(name){
+    document.body.classList.remove(...availableThemes);
+    if(!name) name = localStorage.getItem('kp_theme') || 'theme-purple-pink';
+    document.body.classList.add(name);
+    localStorage.setItem('kp_theme', name);
+  }
+  // apply saved theme on load
+  applyTheme(localStorage.getItem('kp_theme'));
 
   // Simple client-side router + UI
   const tabs = document.querySelectorAll('.navbtn');
@@ -209,6 +246,10 @@
           <button class="btn" id="exportBtn">Export CSV</button>
           <input id="keysSearch" class="input" placeholder="Search keys..." style="margin-left:auto;width:260px" />
         </div>
+        <div id="generatedArea" style="margin-top:8px;display:none">
+          <label style="font-size:13px;color:var(--muted)">Generated keys (comma-separated)</label>
+          <textarea id="generatedTxt" class="input" style="height:90px;white-space:pre-wrap"></textarea>
+        </div>
         <div id="keysList" class="list">Loading...</div>
         <div style="display:flex;justify-content:center;gap:8px;margin-top:8px"><button class="btn" id="prevPage">Prev</button><div id="pageInfo" style="align-self:center;color:#bbb"></div><button class="btn" id="nextPage">Next</button></div>
       </div>`;
@@ -218,7 +259,19 @@
       const type = document.getElementById('genType').value;
       try{
         const r = await api.get('/generate?amount='+amt+'&type='+type);
-        showToast('Generated '+(r.data.keys?.length||0)+' keys');
+        const generatedCount = (r.data.keys?.length) || (r.data.keysstring ? r.data.keysstring.split(',').length : 0);
+        // compose final comma-separated keys string
+        const keysStr = r.data.keysstring || (r.data.keys ? r.data.keys.map(k=>k.key).join(',') : '');
+        const genArea = document.getElementById('generatedArea');
+        const genTxt = document.getElementById('generatedTxt');
+        if(genTxt){ genTxt.value = keysStr || ''; if(genArea) genArea.style.display = genTxt.value ? 'block' : 'none'; }
+        if(keysStr) {
+          try{ await navigator.clipboard.writeText(keysStr); showToast('Generated '+generatedCount+' keys — copied'); }
+          catch(e){ showToast('Generated '+generatedCount+' keys'); }
+        } else {
+          showToast('Generated '+generatedCount+' keys');
+        }
+        // refresh list
         renderKeys();
       }catch(e){ showToast('Generate failed'); }
     });
@@ -227,6 +280,26 @@
       // Export via backend endpoint
       const url = API_BASE + 'keys-csv';
       window.open(url, '_blank');
+    });
+
+    // add Delete All button
+    const deleteAllBtn = document.createElement('button');
+    deleteAllBtn.className = 'btn';
+    deleteAllBtn.textContent = 'Delete All Keys';
+    deleteAllBtn.style.marginLeft = '8px';
+    deleteAllBtn.id = 'deleteAllBtn';
+    // insert after export button
+    const exportEl = document.getElementById('exportBtn');
+    if(exportEl && exportEl.parentNode) exportEl.parentNode.insertBefore(deleteAllBtn, exportEl.nextSibling);
+
+    deleteAllBtn.addEventListener('click', ()=>{
+      showConfirm('Are you sure you want to delete ALL keys? This cannot be undone.', async ()=>{
+        try{
+          await api.delete('/keys-by-type');
+          showToast('All keys deleted');
+          await loadKeysList();
+        }catch(err){ showToast('Delete all failed'); }
+      });
     });
 
     await loadKeysList();
@@ -241,7 +314,7 @@
     list.innerHTML = 'Loading...';
     try{
       const r = await api.get('/keys');
-      allKeys = r.data.keys || [];
+      allKeys = (r.data.keys || []).map(k=>({ ...k }));
       if(!allKeys.length) { list.innerHTML = '<div style="color:#aaa">No keys</div>'; return; }
       // initialize pagination
       currentPage = 1; pageSize = 10;
@@ -262,16 +335,41 @@
     if(currentPage > pages) currentPage = pages;
     const start = (currentPage-1)*pageSize; const pageItems = filtered.slice(start, start+pageSize);
     if(!pageItems.length){ list.innerHTML = '<div style="color:#aaa">No keys</div>'; document.getElementById('pageInfo').textContent = `${total} items`; return; }
-    list.innerHTML = pageItems.map(k=>`<div class="card" style="display:flex;justify-content:space-between;align-items:center"><div>
-        <div style="font-weight:700">${k.key}</div>
-        <div style="font-size:12px;color:#bbb">${k.type} • redeemed:${k.redeemed}</div>
+    list.innerHTML = pageItems.map(k=>{
+      const alias = localStorage.getItem('alias_'+k.key) || '';
+      return `<div class="card" style="display:flex;justify-content:space-between;align-items:center"><div>
+        <div style="font-weight:700"><span class="key-name" data-key="${k.key}">${alias || k.key}</span></div>
+        <div style="font-size:12px;color:var(--muted)">${k.type} • redeemed:${k.redeemed}</div>
       </div>
-      <div style="display:flex;gap:8px">
+      <div style="display:flex;gap:8px;align-items:center">
+        <select class="input select type-select" data-key="${k.key}"><option value="lifetime">lifetime</option><option value="weekly">weekly</option></select>
         <button class="btn" data-action="copy" data-key="${k.key}">Copy</button>
         <button class="btn" data-action="delete" data-key="${k.key}">Delete</button>
-      </div></div>`).join('');
+      </div></div>`;
+    }).join('');
 
     document.getElementById('pageInfo').textContent = `Page ${currentPage}/${pages} — ${total} items`;
+
+    // wire selects to current type and change handler
+    list.querySelectorAll('.type-select').forEach(s=>{
+      const key = s.dataset.key; const item = allKeys.find(x=>x.key===key); if(item) s.value = item.type || 'lifetime';
+      s.addEventListener('change', async (e)=>{
+        const newType = e.target.value;
+        try{ await api.put('/keys/'+encodeURIComponent(key), { type: newType }); showToast('Type updated'); await loadKeysList(); }catch(err){ showToast('Type update failed'); }
+      });
+    });
+
+    // double-click aliasing
+    list.querySelectorAll('.key-name').forEach(el=>{
+      el.addEventListener('dblclick', ()=>{
+        const key = el.dataset.key;
+        const cur = localStorage.getItem('alias_'+key) || '';
+        const v = prompt('Set alias for key (leave empty to remove):', cur);
+        if(v===null) return;
+        if(v.trim()===''){ localStorage.removeItem('alias_'+key); showToast('Alias removed'); } else { localStorage.setItem('alias_'+key, v.trim()); showToast('Alias saved'); }
+        renderPage();
+      });
+    });
 
     list.querySelectorAll('button[data-action="copy"]').forEach(b=>b.addEventListener('click', e=>{ navigator.clipboard.writeText(e.target.dataset.key); showToast('Copied'); }));
     list.querySelectorAll('button[data-action="delete"]').forEach(b=>b.addEventListener('click', async e=>{

@@ -21,10 +21,13 @@ app.use((req, res, next) => {
 // Serve static frontend files from public/
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Fallback for SPA routes: serve index.html for unknown GETs (optional)
-app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
+// Explicit routes for homepage, login, and dashboard
+app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'home.html')));
+app.get('/login', (req, res) => res.sendFile(path.join(__dirname, 'public', 'login.html')));
+app.get('/dashboard', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+
+// Fallback: serve homepage for unknown GETs
+app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'home.html')));
 
 // Start server
 const PORT = process.env.PORT || 3000;
