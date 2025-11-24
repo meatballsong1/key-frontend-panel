@@ -54,8 +54,8 @@ body{background:linear-gradient(135deg,var(--bg),#160422);color:var(--text);disp
 /* site footer */
 .site-footer{position:fixed;left:0;right:0;bottom:6px;text-align:center;font-size:12px;color:var(--muted);pointer-events:none}
 .site-footer .heart{pointer-events:auto}
-.card{background:linear-gradient(90deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));border-radius:10px;padding:8px;margin-bottom:10px;box-shadow:0 6px 14px rgba(0,0,0,0.45)}
-.btn{background:linear-gradient(90deg,var(--accent1),var(--accent2));border:none;padding:6px 10px;border-radius:8px;color:var(--text);cursor:pointer;font-size:14px}
+.card{background:linear-gradient(90deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));border-radius:10px;padding:6px;margin-bottom:8px;box-shadow:0 6px 14px rgba(0,0,0,0.45)}
+.btn{background:linear-gradient(90deg,var(--accent1),var(--accent2));border:none;padding:6px 10px;border-radius:8px;color:var(--text);cursor:pointer;font-size:13px}
 .btn:hover{filter:brightness(1.05);transform:translateY(-2px)}
 .input{width:100%;padding:8px;border-radius:6px;border:1px solid rgba(255,255,255,0.06);background:transparent;color:var(--text);font-size:13px}
 .tabs{display:flex;gap:8px;margin-top:12px}
@@ -77,6 +77,9 @@ body{background:linear-gradient(135deg,var(--bg),#160422);color:var(--text);disp
 
 /* custom styled select */
 .input.select{appearance:none;-webkit-appearance:none;background-image:linear-gradient(45deg,transparent 50%, #fff 50%),linear-gradient(135deg,#fff 50%, transparent 50%);background-position:calc(100% - 18px) calc(1em + 2px),calc(100% - 13px) calc(1em + 2px);background-size:5px 5px,5px 5px;background-repeat:no-repeat;border-radius:8px;padding-right:36px}
+/* Ensure select text is readable on dark backgrounds */
+.input.select, .input.select option { color: var(--text); background: transparent }
+.input.select { padding-left:10px }
 
 /* small utilities */
 .muted{color:var(--muted)}
@@ -112,3 +115,20 @@ body{background:linear-gradient(135deg,var(--bg),#160422);color:var(--text);disp
 
 /* responsive tweak */
 @media(max-width:420px){.embed-toast{right:10px;left:10px;width:auto}}
+
+/* Customer card notes and profile styling */
+.customer-card { display:flex; gap:12px; align-items:flex-start }
+.customer-meta { flex:1 }
+.customer-avatar { width:64px; height:64px; border-radius:8px; object-fit:cover; background:linear-gradient(180deg, rgba(255,255,255,0.02), transparent); }
+.customer-name { font-weight:800; font-size:14px }
+.customer-sub { font-size:12px; color:var(--muted); margin-left:8px }
+.customer-keys { font-size:13px; color:var(--muted); margin-top:6px }
+.notes-list { margin-top:8px; display:flex; flex-direction:column; gap:6px }
+.note-item { background:rgba(255,255,255,0.02); padding:8px; border-radius:8px; font-size:13px; color:var(--text) }
+.note-meta { font-size:12px; color:var(--muted); margin-top:6px }
+.note-add { display:flex; gap:8px; margin-top:8px }
+.note-add textarea { flex:1; min-height:56px }
+
+/* compact customer action buttons */
+.cust-actions { display:flex; flex-direction:column; gap:8px; align-items:flex-end }
+.cust-actions .btn { font-size:12px; padding:6px 8px }

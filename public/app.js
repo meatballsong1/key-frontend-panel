@@ -1,5 +1,6 @@
 (function(){
   const API_BASE = 'https://tradeskey-backend.onrender.com/';
+  const AVATAR_API = 'https://avatar-cyan.vercel.app'; // Discord avatar/profile proxy (per provided quick-start)
   const toast = document.getElementById('toast');
   const toastMsg = document.getElementById('toastMsg');
   const audio = document.getElementById('notifAudio');
@@ -31,6 +32,26 @@
         g.gain.value = 0.1; o.start(); setTimeout(()=>{o.stop(); ctx.close();}, 180);
       }catch(e){/* silent fail */}
     });
+  }
+
+  // Small helpers
+  function escapeHtml(str){
+    if(!str) return '';
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
+  }
+
+  // Fetch Discord-like profile via avatar-cyan proxy. Returns { username, discriminator, avatarUrl } or null
+  async function fetchDiscord(userId){
+    if(!userId) return null;
+    try{
+      const u = `${AVATAR_API}/api/${encodeURIComponent(userId)}`;
+      const resp = await fetch(u);
+      if(!resp.ok) return null;
+      const data = await resp.json();
+      // avatar image redirect endpoint
+      const avatarUrl = `${AVATAR_API}/api/pfp/${encodeURIComponent(userId)}/image?size=128`;
+      return { username: data?.username || null, discriminator: data?.discriminator || null, avatarUrl };
+    }catch(e){ console.debug('fetchDiscord error', e); return null; }
   }
 
   // New embed-style notification (title + description + left color stripe)
@@ -129,6 +150,7 @@
   async function renderTab(tab){
     if(tab === 'stats') return renderStats();
     if(tab === 'keys') return renderKeys();
+    if(tab === 'customers') return renderCustomers();
     if(tab === 'tokens') return renderTokens();
     if(tab === 'settings') return renderSettings();
   }
@@ -415,6 +437,183 @@
       try{ await api.post('/tokens', { token: t, role }); showToast('Added'); renderTokens(); }catch(e){ showToast('Add failed'); }
     });
     try{ const r = await api.get('/tokens'); const tokens = r.data.tokens || []; const el = document.getElementById('tokensList'); el.innerHTML = tokens.map(tok=>`<div class="card" style="display:flex;justify-content:space-between"><div><div style="font-weight:700">${tok.token}</div><div style="font-size:12px;color:#bbb">${tok.role}</div></div><div style="display:flex;gap:8px"><button class="btn" data-id="${tok._id}" data-action="del">Delete</button></div></div>`).join(''); el.querySelectorAll('button[data-action="del"]').forEach(b=>b.addEventListener('click', async e=>{ if(!confirm('Delete token?')) return; try{ await api.delete('/tokens/'+e.target.dataset.id); showToast('Deleted'); renderTokens(); }catch(err){ showToast('Delete failed'); }})); }catch(e){ document.getElementById('tokensList').innerHTML = '<div style="color:#ff9aa2">Failed to load tokens</div>' }
+  }
+
+  // Customers view
+  async function renderCustomers(){
+    content.innerHTML = `
+      <div class="card"><h3>Customers</h3>
+        <div style="display:flex;gap:8px;margin-bottom:8px;align-items:center">
+          <input id="custSearch" class="input" placeholder="Search users or IDs..." style="width:240px" />
+          <select id="custSubFilter" class="input" style="width:160px"><option value="">All subscriptions</option><option value="weekly">weekly</option><option value="lifetime">lifetime</option></select>
+          <button class="btn" id="custExport">Export CSV</button>
+          <div style="margin-left:auto;color:var(--muted);font-size:13px">Customers: <span id="custCount">0</span></div>
+        </div>
+        <div id="customersList" class="list">Loading...</div>
+        <div style="display:flex;justify-content:center;gap:8px;margin-top:8px"><button class="btn" id="custPrev">Prev</button><div id="custPageInfo" style="align-self:center;color:#bbb"></div><button class="btn" id="custNext">Next</button></div>
+      </div>`;
+
+    // state
+    let allCustomers = [];
+    let custPage = 1;
+    const custPageSize = 8;
+
+    async function loadCustomers(){
+      const el = document.getElementById('customersList');
+      el.innerHTML = 'Loading...';
+      try{
+        const r = await api.get('/customers');
+        allCustomers = (r.data.customers || []).map(c=>({ ...c }));
+        document.getElementById('custCount').textContent = String(allCustomers.length);
+        custPage = 1; renderCustPage();
+      }catch(e){ el.innerHTML = '<div style="color:#ff9aa2">Failed to load customers</div>'; }
+    }
+
+    function avatarFor(id){
+      // Use DiceBear to generate consistent avatar from userId seed
+      return `https://api.dicebear.com/6.x/thumbs/png?seed=${encodeURIComponent(id)}&size=64&backgroundType=gradientLinear`;
+    }
+
+    function renderCustPage(){
+      const el = document.getElementById('customersList');
+      const search = document.getElementById('custSearch')?.value?.toLowerCase() || '';
+      const sub = document.getElementById('custSubFilter')?.value || '';
+      const filtered = allCustomers.filter(c=>{
+        if(sub && (c.subscriptionType||'') !== sub) return false;
+        return String(c.userId).toLowerCase().includes(search) || (c.keys||[]).some(k=> (k.key||'').toLowerCase().includes(search));
+      });
+      const total = filtered.length; const pages = Math.max(1, Math.ceil(total / custPageSize));
+      if(custPage>pages) custPage = pages;
+      const start = (custPage-1)*custPageSize; const items = filtered.slice(start, start + custPageSize);
+      if(!items.length){ el.innerHTML = '<div style="color:#aaa">No customers</div>'; document.getElementById('custPageInfo').textContent = `${total} items`; return; }
+
+      el.innerHTML = items.map(c=>{
+        const created = c.createdAt ? new Date(c.createdAt).toLocaleString() : '';
+        const updated = c.updatedAt ? new Date(c.updatedAt).toLocaleString() : '';
+        const keyCount = (c.keys||[]).length;
+        const keysPreview = (c.keys||[]).slice(0,4).map(k=>`${k.key} (${k.type})`).join(', ');
+        const subText = c.subscriptionType || 'none';
+        const safeId = String(c.userId).replace(/[^a-zA-Z0-9_-]/g,'_');
+        return `<div class="card customer-card">
+          <img id="discImg_${safeId}" src="" alt="avatar" class="customer-avatar" />
+          <div class="customer-meta">
+            <div style="display:flex;align-items:center;gap:8px"><div class="customer-name" id="discName_${safeId}">${c.userId}</div><div class="customer-sub" id="discTag_${safeId}">${subText}</div><a style="margin-left:6px;font-size:12px;color:var(--muted)" href="https://discord.com/users/${c.userId}" target="_blank">View on Discord</a></div>
+            <div class="customer-keys">Keys: ${keyCount} — ${keysPreview}</div>
+            <div class="note-meta" style="margin-top:6px">Created: ${created} • Updated: ${updated}</div>
+
+            <div class="notes-list" id="notes_${safeId}">
+              ${(c.notes||[]).map(n=>`<div class="note-item"><div>${escapeHtml(n.note)}</div><div class="note-meta">${n.author||''} • ${new Date(n.createdAt).toLocaleString()}</div></div>`).join('')}
+            </div>
+
+            <div class="note-add">
+              <textarea id="noteInput_${safeId}" class="input" placeholder="Add a note..."></textarea>
+              <button class="btn" id="addNote_${safeId}">Add</button>
+            </div>
+
+          </div>
+          <div class="cust-actions">
+            <select id="subSelect_${safeId}" class="input select" style="width:140px"><option value="">subscription</option><option value="weekly">weekly</option><option value="lifetime">lifetime</option><option value="null">none</option></select>
+            <button class="btn" data-action="custExport" data-user='${encodeURIComponent(c.userId)}'>Export</button>
+            <button class="btn" data-action="custDelete" data-user='${encodeURIComponent(c.userId)}'>Delete</button>
+          </div>
+        </div>`;
+      }).join('');
+
+      // after render: wire up discord fetch, notes add, subscription change and actions
+      items.forEach(c=>{
+        const safeId = String(c.userId).replace(/[^a-zA-Z0-9_-]/g,'_');
+        const imgEl = document.getElementById(`discImg_${safeId}`);
+        const nameEl = document.getElementById(`discName_${safeId}`);
+        const tagEl = document.getElementById(`discTag_${safeId}`);
+        // fetch discord info asynchronously
+        fetchDiscord(c.userId).then(info=>{
+          if(!info) {
+            console.debug('discord-not-found for', c.userId);
+            // leave name as userId and no avatar
+            return;
+          }
+          if(imgEl && info.avatarUrl) imgEl.src = info.avatarUrl;
+          if(nameEl && info.username) nameEl.textContent = info.username;
+          if(tagEl) tagEl.textContent = (info.discriminator ? `#${info.discriminator}` : (c.subscriptionType || ''));
+        }).catch(err=>{ console.debug('discord-fetch-error', c.userId, err); });
+
+        // add note handler
+        const addBtn = document.getElementById(`addNote_${safeId}`);
+        const noteInput = document.getElementById(`noteInput_${safeId}`);
+        const notesContainer = document.getElementById(`notes_${safeId}`);
+        if(addBtn && noteInput){ addBtn.addEventListener('click', async ()=>{
+          const text = noteInput.value.trim(); if(!text) return showToast('Enter note');
+          try{
+            const r = await api.post('/customers/'+encodeURIComponent(c.userId)+'/notes', { note: text });
+            const entry = r.data.note;
+            // prepend note
+            if(notesContainer) notesContainer.insertAdjacentHTML('afterbegin', `<div class="note-item"><div>${escapeHtml(entry.note)}</div><div class="note-meta">${escapeHtml(entry.author||'')} • ${new Date(entry.createdAt).toLocaleString()}</div></div>`);
+            noteInput.value = '';
+            showToast('Note added');
+          }catch(err){ showToast('Add note failed'); }
+        }); }
+
+        // subscription change
+        const subSelect = document.getElementById(`subSelect_${safeId}`);
+        if(subSelect){ subSelect.value = c.subscriptionType || ''; subSelect.addEventListener('change', async (e)=>{
+          const val = e.target.value === 'null' ? null : e.target.value;
+          try{ await api.put('/customers/'+encodeURIComponent(c.userId)+'/subscription', { subscriptionType: val }); showToast('Subscription updated'); }catch(err){ showToast('Subscription update failed'); }
+        }); }
+
+        // delete and export buttons wired by earlier code (custDelete/custExport) - rebind to ensure handlers
+        const exportBtn = document.querySelector(`button[data-action="custExport"][data-user='${encodeURIComponent(c.userId)}']`);
+        if(exportBtn){ exportBtn.addEventListener('click', ()=>{ const cust = items.find(x=>String(x.userId)===String(c.userId)); if(!cust) return showToast('Not found'); const rows = ['key,type,redeemed,redeemedAt']; (cust.keys||[]).forEach(k=>{ rows.push(`${k.key},${k.type},${k.redeemed? 'true':'false'},${k.redeemedAt||''}`); }); const csv = rows.join('\n'); const blob = new Blob([csv], { type: 'text/csv' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `customer-${cust.userId}-keys.csv`; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url); }); }
+
+        const deleteBtn = document.querySelector(`button[data-action="custDelete"][data-user='${encodeURIComponent(c.userId)}']`);
+        if(deleteBtn){ deleteBtn.addEventListener('click', ()=>{ showConfirm('Delete customer '+c.userId+'? This will remove customer record.', async ()=>{ try{ await api.delete('/customers/'+encodeURIComponent(c.userId)); showToast('Deleted'); await loadCustomers(); }catch(err){ showToast('Delete failed'); } }); }); }
+      });
+
+      document.getElementById('custPageInfo').textContent = `Page ${custPage}/${pages} — ${total} items`;
+
+      // wire actions
+      el.querySelectorAll('button[data-action="custDetails"]').forEach(b=>b.addEventListener('click', e=>{
+        try{
+          const data = decodeURIComponent(e.target.dataset.user);
+          const obj = JSON.parse(data);
+          keyModalTitle.textContent = `Customer: ${obj.userId}`;
+          keyModalBody.textContent = JSON.stringify(obj, null, 2);
+          if(keyModal){ keyModal.style.display='flex'; keyModal.classList.remove('hidden'); }
+        }catch(err){ showToast('Failed to show details'); }
+      }));
+
+      el.querySelectorAll('button[data-action="custExport"]').forEach(b=>b.addEventListener('click', e=>{
+        const userId = decodeURIComponent(e.target.dataset.user);
+        const cust = allCustomers.find(x=>String(x.userId)===String(userId));
+        if(!cust) return showToast('Customer not found');
+        const rows = ['key,type,redeemed,redeemedAt'];
+        (cust.keys||[]).forEach(k=>{ rows.push(`${k.key},${k.type},${k.redeemed? 'true':'false'},${k.redeemedAt||''}`); });
+        const csv = rows.join('\n');
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a'); a.href = url; a.download = `customer-${userId}-keys.csv`; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+      }));
+
+      el.querySelectorAll('button[data-action="custDelete"]').forEach(b=>b.addEventListener('click', e=>{
+        const userId = decodeURIComponent(e.target.dataset.user);
+        showConfirm('Delete customer '+userId+'? This will remove customer record.', async ()=>{
+          try{ await api.delete('/customers/'+encodeURIComponent(userId)); showToast('Deleted'); await loadCustomers(); }catch(err){ showToast('Delete failed'); }
+        });
+      }));
+    }
+
+    // events
+    document.getElementById('custSearch').addEventListener('input', ()=>{ custPage = 1; renderCustPage(); });
+    document.getElementById('custSubFilter').addEventListener('change', ()=>{ custPage = 1; renderCustPage(); });
+    document.getElementById('custPrev').addEventListener('click', ()=>{ if(custPage>1){ custPage--; renderCustPage(); } });
+    document.getElementById('custNext').addEventListener('click', ()=>{ custPage++; renderCustPage(); });
+    document.getElementById('custExport').addEventListener('click', ()=>{
+      // Export all customers CSV
+      const rows = ['userId,subscriptionType,keysCount,keys'];
+      (allCustomers||[]).forEach(c=>{ const keysList = (c.keys||[]).map(k=>`${k.key}(${k.type})`).join('|'); rows.push(`${c.userId},${c.subscriptionType||''},"${(c.keys||[]).length}","${keysList.replace(/"/g,'""')}"`); });
+      const csv = rows.join('\n'); const blob = new Blob([csv], { type: 'text/csv' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `customers-${Date.now()}.csv`; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+    });
+
+    await loadCustomers();
   }
 
   // key modal close
