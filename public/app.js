@@ -19,6 +19,8 @@
     notifyApiDown();
     return Promise.reject(err);
   });
+  // Apply API base override from localStorage if present
+  try{ const apiOverride = localStorage.getItem('kp_api_base_override'); if(apiOverride) api.defaults.baseURL = apiOverride; }catch(e){}
 
   function notifyApiDown(){
     showEmbedNotification('API Unreachable', 'The backend is not responding — some features may be unavailable.');
@@ -126,6 +128,12 @@
   const content = document.getElementById('content');
   const title = document.getElementById('viewTitle');
 
+  // Apply persisted UI prefs
+  (function applyUIPrefs(){
+    if(localStorage.getItem('kp_compact') === '1') document.body.classList.add('compact');
+    if(localStorage.getItem('kp_sidebar_collapsed') === '1') document.body.classList.add('sidebar-collapsed');
+  })();
+
   function setActive(tabName){
     tabs.forEach(t=>t.classList.remove('active'));
     const tb = document.querySelector('[data-tab="'+tabName+'"]'); if(tb) tb.classList.add('active');
@@ -133,7 +141,20 @@
     renderTab(tabName);
   }
 
+  // Refresh current view (useful after deletes/changes)
+  async function refreshCurrentView(){
+    const active = document.querySelector('.navbtn.active')?.dataset?.tab || 'stats';
+    try{ await renderTab(active); }catch(e){ console.debug('refreshCurrentView error', e); }
+  }
+
   tabs.forEach(t=>t.addEventListener('click', ()=>setActive(t.dataset.tab)));
+
+  // sidebar toggle button
+  const sidebarToggle = document.getElementById('sidebarToggle');
+  if(sidebarToggle){ sidebarToggle.addEventListener('click', ()=>{
+    const collapsed = document.body.classList.toggle('sidebar-collapsed');
+    localStorage.setItem('kp_sidebar_collapsed', collapsed ? '1':'0');
+  }); }
 
   // make first tab visually active by default
   (function initTabs(){
@@ -329,7 +350,8 @@
         try{
           await api.delete('/keys-by-type');
           showToast('All keys deleted');
-          await loadKeysList();
+          // refresh whatever view is active (keys, stats, customers)
+          await refreshCurrentView();
         }catch(err){ showToast('Delete all failed'); }
       });
     });
@@ -425,7 +447,7 @@
     list.querySelectorAll('button[data-action="delete"]').forEach(b=>b.addEventListener('click', async e=>{
       const key = e.target.dataset.key;
       if(!confirm('Delete key '+key+'?')) return;
-      try{ await api.delete('/keys/'+encodeURIComponent(key)); showToast('Deleted'); await loadKeysList(); }catch(err){ showToast('Delete failed'); }
+      try{ await api.delete('/keys/'+encodeURIComponent(key)); showToast('Deleted'); await refreshCurrentView(); }catch(err){ showToast('Delete failed'); }
     }));
   }
 
@@ -512,7 +534,8 @@
 
           </div>
           <div class="cust-actions">
-            <select id="subSelect_${safeId}" class="input select" style="width:140px"><option value="">subscription</option><option value="weekly">weekly</option><option value="lifetime">lifetime</option><option value="null">none</option></select>
+            <select id="subSelect_${safeId}" class="input select" style="width:140px"><option value="">subscription</option><option value="weekly">weekly</option><option value="monthly">monthly</option><option value="lifetime">lifetime</option><option value="null">none</option></select>
+            <button class="btn" data-action="grantMonthly" data-user='${encodeURIComponent(c.userId)}'>Grant Monthly</button>
             <button class="btn" data-action="custExport" data-user='${encodeURIComponent(c.userId)}'>Export</button>
             <button class="btn" data-action="custDelete" data-user='${encodeURIComponent(c.userId)}'>Delete</button>
           </div>
@@ -550,6 +573,10 @@
             if(notesContainer) notesContainer.insertAdjacentHTML('afterbegin', `<div class="note-item"><div>${escapeHtml(entry.note)}</div><div class="note-meta">${escapeHtml(entry.author||'')} • ${new Date(entry.createdAt).toLocaleString()}</div></div>`);
             noteInput.value = '';
             showToast('Note added');
+                // optionally refresh whole customers view
+                if(localStorage.getItem('kp_auto_refresh')==='1'){
+                  try{ await loadCustomers(); }catch(e){}
+                }
           }catch(err){ showToast('Add note failed'); }
         }); }
 
@@ -599,6 +626,44 @@
           try{ await api.delete('/customers/'+encodeURIComponent(userId)); showToast('Deleted'); await loadCustomers(); }catch(err){ showToast('Delete failed'); }
         });
       }));
+      
+      // Grant Monthly handler: generate a monthly key (or fallback) and redeem on behalf of user
+      el.querySelectorAll('button[data-action="grantMonthly"]').forEach(b=>b.addEventListener('click', e=>{
+        const userId = decodeURIComponent(e.target.dataset.user);
+        showConfirm('Generate a monthly key and redeem it for '+userId+'? This will grant or update subscription.', async ()=>{
+          try{
+            showToast('Generating monthly key...');
+            let key = null;
+            try{
+              const g = await api.get('/generate?amount=1&type=monthly');
+              if(g?.data?.keys?.length) key = g.data.keys[0].key;
+              else if(g?.data?.keysstring) key = g.data.keysstring.split(',')[0];
+            }catch(err){ key = null; }
+            // fallback: generate weekly if monthly not supported
+            if(!key){
+              try{ const g2 = await api.get('/generate?amount=1&type=weekly'); if(g2?.data?.keys?.length) key = g2.data.keys[0].key; else if(g2?.data?.keysstring) key = g2.data.keysstring.split(',')[0]; }catch(err){ key = null; }
+            }
+            if(!key) return showToast('Failed to generate key');
+
+            // Redeem the key for the user
+            try{
+              await api.get('/redeem?key='+encodeURIComponent(key)+'&user='+encodeURIComponent(userId));
+              showToast('Key redeemed for '+userId);
+            }catch(err){ showToast('Redeem failed'); return; }
+
+            // Try to set subscription to monthly on the customer record (may fail if backend doesn't accept monthly)
+            try{
+              await api.put('/customers/'+encodeURIComponent(userId)+'/subscription', { subscriptionType: 'monthly' });
+              showToast('Subscription updated to monthly');
+            }catch(err){
+              showToast('Redeemed but server refused monthly subscription (backend may not support monthly)');
+            }
+
+            // refresh UI
+            await refreshCurrentView();
+          }catch(err){ showToast('Operation failed'); }
+        });
+      }));
     }
 
     // events
@@ -620,10 +685,50 @@
   if(keyModalClose){ keyModalClose.addEventListener('click', ()=>{ if(keyModal){ keyModal.style.display='none'; keyModal.classList.add('hidden'); } }); }
 
   async function renderSettings(){
-    content.innerHTML = `<div class="card"><h3>Settings</h3><div style="display:flex;gap:12px;align-items:center"><label>Auth enabled:</label><button class="btn" id="toggleAuth">Toggle</button></div><div id="settingsMsg" style="margin-top:8px"></div></div>`;
-    try{ const r = await api.get('/settings/auth-enabled'); const enabled = r.data.authEnabled; document.getElementById('settingsMsg').textContent = 'Auth is '+(enabled?'enabled':'disabled'); }catch(e){ document.getElementById('settingsMsg').textContent='Failed to read settings'; }
+    content.innerHTML = `
+      <div class="card"><h3>Settings</h3>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <div style="display:flex;gap:12px;align-items:center"><label style="min-width:160px">Auth enabled:</label><button class="btn" id="toggleAuth">Toggle</button><span id="authState" style="color:var(--muted)"></span></div>
+          <div style="display:flex;gap:12px;align-items:center"><label style="min-width:160px">Compact UI:</label><button class="btn" id="toggleCompact">Toggle</button><span id="compactState" style="color:var(--muted)"></span></div>
+          <div style="display:flex;gap:12px;align-items:center"><label style="min-width:160px">Sidebar collapsed:</label><button class="btn" id="toggleSidebar">Toggle</button><span id="sidebarState" style="color:var(--muted)"></span></div>
+          <div style="display:flex;gap:12px;align-items:center"><label style="min-width:160px">Auto-refresh on changes:</label><button class="btn" id="toggleAutoRefresh">Toggle</button><span id="autoRefreshState" style="color:var(--muted)"></span></div>
+          <div style="display:flex;gap:8px;align-items:center"><label style="min-width:160px">API base override:</label><input id="apiBaseInput" class="input" style="width:420px" placeholder="https://..." /> <button class="btn" id="saveApiBase">Save</button></div>
+          <div style="display:flex;gap:8px;align-items:center"><label style="min-width:160px">Local data:</label><button class="btn" id="clearLocal">Clear local storage</button></div>
+        </div>
+      </div>`;
+
+    // load current values
+    try{
+      const r = await api.get('/settings/auth-enabled'); const enabled = r.data.authEnabled; document.getElementById('authState').textContent = enabled? 'enabled':'disabled';
+    }catch(e){ document.getElementById('authState').textContent = 'unknown'; }
+
+    document.getElementById('compactState').textContent = localStorage.getItem('kp_compact')==='1' ? 'on' : 'off';
+    document.getElementById('sidebarState').textContent = localStorage.getItem('kp_sidebar_collapsed')==='1' ? 'collapsed' : 'expanded';
+    document.getElementById('autoRefreshState').textContent = localStorage.getItem('kp_auto_refresh')==='1' ? 'on' : 'off';
+    document.getElementById('apiBaseInput').value = localStorage.getItem('kp_api_base_override') || API_BASE;
+
     document.getElementById('toggleAuth').addEventListener('click', async ()=>{
-      try{ const cur = (await api.get('/settings/auth-enabled')).data.authEnabled; await api.put('/settings/auth-enabled', { enabled: !cur }); showToast('Toggled'); renderSettings(); }catch(e){ showToast('Toggle failed'); }
+      try{ const cur = (await api.get('/settings/auth-enabled')).data.authEnabled; await api.put('/settings/auth-enabled', { enabled: !cur }); showToast('Auth toggled'); renderSettings(); }catch(e){ showToast('Toggle failed'); }
+    });
+
+    document.getElementById('toggleCompact').addEventListener('click', ()=>{
+      const is = document.body.classList.toggle('compact'); localStorage.setItem('kp_compact', is? '1':'0'); document.getElementById('compactState').textContent = is? 'on':'off'; showToast('Compact mode '+(is? 'on':'off'));
+    });
+
+    document.getElementById('toggleSidebar').addEventListener('click', ()=>{
+      const is = document.body.classList.toggle('sidebar-collapsed'); localStorage.setItem('kp_sidebar_collapsed', is? '1':'0'); document.getElementById('sidebarState').textContent = is? 'collapsed':'expanded'; showToast('Sidebar '+(is? 'collapsed':'expanded'));
+    });
+
+    document.getElementById('toggleAutoRefresh').addEventListener('click', ()=>{
+      const cur = localStorage.getItem('kp_auto_refresh')==='1'; localStorage.setItem('kp_auto_refresh', cur? '0':'1'); document.getElementById('autoRefreshState').textContent = cur? 'off':'on'; showToast('Auto-refresh on changes '+(cur? 'off':'on'));
+    });
+
+    document.getElementById('saveApiBase').addEventListener('click', ()=>{
+      const v = document.getElementById('apiBaseInput').value.trim(); if(!v) return showToast('Enter API base'); localStorage.setItem('kp_api_base_override', v); api.defaults.baseURL = v; showToast('API base updated');
+    });
+
+    document.getElementById('clearLocal').addEventListener('click', ()=>{
+      showConfirm('Clear local preferences (theme, aliases, compact, sidebar)?', ()=>{ localStorage.removeItem('kp_theme'); localStorage.removeItem('kp_compact'); localStorage.removeItem('kp_sidebar_collapsed'); localStorage.removeItem('kp_auto_refresh'); localStorage.removeItem('kp_api_base_override'); showToast('Local prefs cleared'); });
     });
   }
 

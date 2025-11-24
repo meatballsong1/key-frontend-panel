@@ -14,7 +14,7 @@ body{background:linear-gradient(135deg,var(--bg),#160422);color:var(--text);disp
 .sidebar{width:140px;min-width:120px;background:linear-gradient(180deg,rgba(255,255,255,0.02),transparent);border-radius:10px;padding:8px;display:flex;flex-direction:column;gap:8px}
 .brand{font-weight:700;font-size:12px;letter-spacing:0.2px}
 .navbtn{padding:6px;border-radius:6px;border:none;background:transparent;color:var(--muted);cursor:pointer;text-align:left;font-size:12px}
-.navbtn:hover{transform:translateX(4px);color:var(--text)}
+.navbtn:hover{color:var(--text)}
 .navbtn.active{background:linear-gradient(90deg,var(--accent1),var(--accent2));color:#111;font-weight:700}
 .main{flex:1;background:linear-gradient(180deg,rgba(255,255,255,0.01),transparent);border-radius:10px;padding:12px;display:flex;flex-direction:column}
 .topbar{display:flex;align-items:center;justify-content:space-between}
@@ -42,7 +42,7 @@ body{background:linear-gradient(135deg,var(--bg),#160422);color:var(--text);disp
 .fade-in{animation:fadeIn .28s ease-out}
 @keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
 .card{transition:transform .22s cubic-bezier(.2,.9,.3,1),box-shadow .22s ease,opacity .2s}
-.card:hover{transform:translateY(-4px)}
+.card:hover{transform:scale(1.01);box-shadow:0 12px 36px rgba(0,0,0,0.6)}
 
 /* keys bulk action toolbar */
 .keys-toolbar{display:flex;gap:6px;align-items:center;margin-bottom:6px}
@@ -71,15 +71,40 @@ body{background:linear-gradient(135deg,var(--bg),#160422);color:var(--text);disp
 @keyframes toastPop{0%{transform:translateY(12px) scale(.96);opacity:0}60%{transform:translateY(-6px) scale(1.02)}100%{transform:translateY(0) scale(1);opacity:1}}
 /* subtle hover movement */
 .card, .navbtn, .btn {transition:transform .25s cubic-bezier(.2,.9,.3,1), box-shadow .2s ease}
-.card:hover{transform:translateY(-8px) rotate(-0.2deg)}
+.card:hover{transform:scale(1.01)}
 .btn{transition:transform .18s cubic-bezier(.2,.9,.3,1), box-shadow .18s ease}
-.btn:active{transform:translateY(1px) scale(.995)}
+.btn:active{transform:scale(.995)}
 
 /* custom styled select */
 .input.select{appearance:none;-webkit-appearance:none;background-image:linear-gradient(45deg,transparent 50%, #fff 50%),linear-gradient(135deg,#fff 50%, transparent 50%);background-position:calc(100% - 18px) calc(1em + 2px),calc(100% - 13px) calc(1em + 2px);background-size:5px 5px,5px 5px;background-repeat:no-repeat;border-radius:8px;padding-right:36px}
 /* Ensure select text is readable on dark backgrounds */
 .input.select, .input.select option { color: var(--text); background: transparent }
+.input.select{ -webkit-text-fill-color: var(--text); }
 .input.select { padding-left:10px }
+
+/* Compact mode adjustments */
+.compact .container{height:560px}
+.compact .card{padding:6px;margin-bottom:6px}
+.compact .btn{font-size:12px;padding:6px 8px}
+.compact .navbtn{font-size:12px;padding:6px 8px}
+
+/* Sidebar collapsed */
+.sidebar-collapsed .sidebar{width:56px;min-width:56px}
+.sidebar-collapsed .sidebar .brand{display:none}
+.sidebar-collapsed .sidebar .navtabs{gap:6px}
+.sidebar-collapsed .navbtn{padding:8px;border-radius:8px}
+.sidebar-collapsed .navbtn::after{display:none}
+.sidebar-collapsed .main{padding-left:12px}
+
+/* Customer card styles */
+.customer-card{display:flex;gap:12px;align-items:flex-start;padding:10px;border-radius:8px;background:linear-gradient(180deg, rgba(255,255,255,0.01), transparent);}
+.customer-avatar{width:56px;height:56px;border-radius:8px;object-fit:cover;flex:0 0 56px}
+.customer-meta{flex:1}
+.customer-actions{display:flex;flex-direction:column;gap:8px;align-items:flex-end}
+.customer-notes{margin-top:8px;border-top:1px dashed rgba(255,255,255,0.02);padding-top:8px}
+.customer-note{background:rgba(0,0,0,0.12);padding:6px;border-radius:6px;margin-bottom:6px}
+.note-form{display:flex;gap:8px;margin-top:6px}
+.note-form .input{flex:1}
 
 /* small utilities */
 .muted{color:var(--muted)}
@@ -94,7 +119,7 @@ body{background:linear-gradient(135deg,var(--bg),#160422);color:var(--text);disp
 .confirm-yes:hover{filter:brightness(1.03);transform:translateY(-2px)}
 .confirm-no:hover{filter:brightness(1.03);transform:translateY(-2px)}
 /* subtle swirling hover on buttons */
-.btn:hover{box-shadow:0 8px 24px rgba(168,85,247,0.12);transform:translateY(-4px) rotate(-0.3deg)}
+.btn:hover{box-shadow:0 8px 24px rgba(168,85,247,0.12);transform:scale(1.03)}
 @media(max-width:900px){.container{flex-direction:column;height:auto}.sidebar{width:100%;order:2;height:auto}.main{order:1;padding:12px}}
 
 /* Generated keys textarea styling */
